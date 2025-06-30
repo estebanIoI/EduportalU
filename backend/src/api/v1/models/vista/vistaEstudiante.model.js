@@ -42,10 +42,9 @@ const VistaEstudiante = {
           ESTADO_MATRICULA,
           ESTADO_ACADEMICO,
           PROMEDIO_ACUMULADO        
-        FROM vista_estudiante');
+        FROM vista_estudiantes
         WHERE DOCUMENTO_ESTUDIANTE = ?;
       `, [documentoEstudiante]);
-  
       return rows[0] || null;
     } catch (error) {
       throw error;

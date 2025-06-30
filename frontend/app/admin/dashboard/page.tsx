@@ -5,12 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Download } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { getDashboardStats, getDashboardAspectos, getDashboardRanking, getDashboardPodio } from "@/lib/services/dashboard/dashboard"
+import { dashboardService } from "@/services"
 import { ApiResponse, DashboardStatsResponse, DashboardAspectosResponse, DashboardRankingResponse, DashboardPodioResponse, DashboardParams } from "@/lib/types/dashboard/dashboard"
-import { configuracionEvaluacionService, tiposEvaluacionesService } from "@/lib/services/evaluacionInsitu"
-import { TipoEvaluacion, ConfiguracionEvaluacion } from "@/lib/types/evaluacionInsitu"
 import Filtros from "@/app/admin/components/filters"
-import api from "@/lib/api"
+import apiClient from "@/lib/api"
 
 interface DashboardData {
   stats: DashboardStatsResponse
@@ -40,40 +38,32 @@ export default function AdminDashboard() {
   const [loadingBackup, setLoadingBackup] = useState(false)
 
   const handleBackup = async () => {
-    try {
-      setLoadingBackup(true);
-      
-      const response = await api.get('/backup', {
-        responseType: 'blob',
-      });
+  try {
+        setLoadingBackup(true);
+        
+        // Usar el nuevo método downloadFile
+        const response = await apiClient.downloadFile('/backup', {}, { showMessage: false });
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      
-      const contentDisposition = response.headers['content-disposition'];
-      let fileName = 'backup.sql';
-      
-      if (contentDisposition) {
-        const fileNameMatch = contentDisposition.match(/filename="(.+)"/);
-        if (fileNameMatch && fileNameMatch[1]) {
-          fileName = fileNameMatch[1];
-        }
-      }
-      
-      link.setAttribute('download', fileName);
-      document.body.appendChild(link);
-      link.click();
-      
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
-      
-      toast({
-        title: "Backup generado",
-        description: "El archivo de backup se ha descargado correctamente",
-        variant: "default",
-      });
-      
+        const url = window.URL.createObjectURL(response.data);
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Usar el filename extraído automáticamente o un fallback
+        const fileName = response.filename || 'backup.sql';
+        
+        link.setAttribute('download', fileName);
+        document.body.appendChild(link);
+        link.click();
+        
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Backup generado",
+          description: "El archivo de backup se ha descargado correctamente",
+          variant: "default",
+        });
+        
     } catch (error) {
       console.error('Error al generar el backup:', error);
       toast({
@@ -121,10 +111,10 @@ export default function AdminDashboard() {
         }
 
         const [statsResponse, aspectosResponse, rankingResponse, podioResponse] = await Promise.all([
-          getDashboardStats(params),
-          getDashboardAspectos(params),
-          getDashboardRanking(params),
-          getDashboardPodio(params)
+          dashboardService.getStats(params),
+          dashboardService.getAspectos(params),
+          dashboardService.getRanking(params),
+          dashboardService.getPodio(params)
         ])
 
         const statsData = extractData<DashboardStatsResponse>(statsResponse)

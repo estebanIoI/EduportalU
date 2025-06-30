@@ -30,7 +30,7 @@ import {
 import {
   configuracionAspectoService,
   aspectosEvaluacionService,
-} from "@/lib/services/evaluacionInsitu";
+} from "@/services";
 import { useToast } from "@/hooks/use-toast";
 
 interface ModalConfiguracionAspectoProps {
@@ -71,7 +71,7 @@ export function ModalConfiguracionAspecto({
     const fetchAspectos = async () => {
       try {
         const data = await aspectosEvaluacionService.getAll();
-        setAspectos(data);
+        setAspectos(data.data);
       } catch (error) {
         toast({
           title: "Error al cargar datos",

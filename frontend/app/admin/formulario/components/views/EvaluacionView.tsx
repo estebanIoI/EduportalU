@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AspectoEvaluacion, EscalaValoracion, ConfiguracionEvaluacion, TipoEvaluacion, ConfiguracionAspecto, EstadoActivo } from "@/lib/types/evaluacionInsitu";
-import { configuracionAspectoService, configuracionValoracionService } from "@/lib/services/evaluacionInsitu";
+import { configuracionAspectoService, configuracionValoracionService } from "@/services";
 import { Dispatch, SetStateAction } from "react";
 import { Badge } from "@/components/ui/badge";
 

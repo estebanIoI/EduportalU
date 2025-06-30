@@ -86,14 +86,6 @@ const createDetallesEvaluacion = async (req, res, next) => {
       });
     }
 
-    // Validar que se proporcione el comentario general
-    if (!comentarioGeneral) {
-      return errorResponse(res, { 
-        code: 400, 
-        message: "El comentario general es requerido" 
-      });
-    }
-
     // Actualizar el comentario general en la evaluación
     await EvaluacionesModel.updateEvaluacion(evaluacionId, {
       ...evaluacion,

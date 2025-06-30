@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tag, Edit3, Plus, AlertCircle } from "lucide-react"
 import { AspectoEvaluacion } from "@/lib/types/evaluacionInsitu"
-import { aspectosEvaluacionService } from "@/lib/services/evaluacionInsitu"
+import { aspectosEvaluacionService } from "@/services"
 import { useToast } from "@/hooks/use-toast"
 
 interface ModalAspectoProps {

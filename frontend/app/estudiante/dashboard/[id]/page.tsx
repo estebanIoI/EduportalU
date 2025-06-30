@@ -6,18 +6,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
-import { authService } from "@/lib/services/auth"
+import { authService } from "@/services/evaluacionITP/auth/auth.service"
 import { PerfilEstudiante, MateriaEstudiante } from "@/lib/types/auth"
 import { Progress } from "@/components/ui/progress"
-import api from "@/lib/api"
+import { apiClient } from "@/services/api.client" 
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog"
-import { evaluacionService } from "@/lib/services/evaluacionInsitu/evaluaciones" 
+import { evaluacionesService } from "@/services" 
 import type { Evaluacion } from "@/lib/types/evaluacionInsitu"
 import { useRouter } from "next/navigation"
 import { useParams } from "next/navigation"
@@ -52,10 +51,13 @@ export default function EstudianteDashboard() {
           setPerfil(perfilData)
           setMaterias(perfilData.materias)
           
-          // Cargar reporte de evaluaciones usando axios
+          // ✅ Nuevo cliente con tipado
           try {
-            const reporteResponse = await api.get(`/reportes/estudiantes/${perfilData.documento}/configuracion/${id}`)
-            if (reporteResponse.data) {
+            const reporteResponse = await apiClient.get<ReporteEvaluaciones[]>(
+              `/reportes/estudiantes/${perfilData.documento}/configuracion/${id}`
+            )
+
+            if (reporteResponse.success && reporteResponse.data.length > 0) {
               setReporte(reporteResponse.data[0])
             }
           } catch (error) {
@@ -66,17 +68,25 @@ export default function EstudianteDashboard() {
             })
           }
 
-          // Cargar evaluaciones del estudiante - Solo si tenemos un ID válido
           if (id !== null && !isNaN(id)) {
             try {
-              const evaluacionesData = await evaluacionService.getByEstudianteByConfiguracion(perfilData.documento, id);
-              setEvaluaciones(Array.isArray(evaluacionesData) ? evaluacionesData : []);
+              const evaluacionesResponse = await evaluacionesService.getByEstudianteByConfiguracion(perfilData.documento, id);
+              
+              // Accede a la propiedad 'data' de la ApiResponse
+              if (evaluacionesResponse.success && Array.isArray(evaluacionesResponse.data)) {
+                setEvaluaciones(evaluacionesResponse.data);
+              } else {
+                console.log('Respuesta sin éxito o datos no válidos:', evaluacionesResponse);
+                setEvaluaciones([]);
+              }
             } catch (error) {
+              console.error('Error cargando evaluaciones:', error);
               toast({
                 title: "Error",
                 description: "No se pudo cargar las evaluaciones",
                 variant: "destructive",
               });
+              setEvaluaciones([]); // Asegúrate de limpiar el estado en caso de error
             }
           } else {
             toast({
@@ -85,7 +95,7 @@ export default function EstudianteDashboard() {
               variant: "destructive",
             });
           }
-          
+
         } else {
           toast({
             title: "Error",
@@ -102,7 +112,6 @@ export default function EstudianteDashboard() {
       }
     }
 
-    // Solo cargar si tenemos un ID válido o si al menos tenemos los params
     if (configId !== undefined) {
       cargarPerfil()
     }
@@ -122,40 +131,8 @@ export default function EstudianteDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white p-4 shadow-sm flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setShowProfileModal(true)}
-            className="hover:bg-gray-100"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-900" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{perfil.nombre_completo}</h1>
-            {id && (
-              <p className="text-sm text-gray-500">Configuración #{id}</p>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/estudiante/bienvenida">
-            <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-              ← Volver
-            </Button>
-          </Link>
-          <Link href="/">
-            <Button variant="outline" size="sm" className="border-gray-900 text-gray-900 hover:bg-gray-100">
-              Cerrar Sesión
-            </Button>
-          </Link>
-        </div>
-      </header>
-      
-            <main className="container mx-auto p-6 max-w-6xl">
+
+      <main className="container mx-auto p-6 max-w-6xl">
         {/* Card principal mejorada */}
         <Card className="shadow-lg border-0 bg-white/90 backdrop-blur-sm">
           <CardHeader className="pb-6">

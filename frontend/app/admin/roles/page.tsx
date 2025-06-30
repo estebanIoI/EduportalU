@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { rolesService, userRolesService } from "@/lib/services/evaluacionInsitu";
+import { rolesService } from "@/services/evaluacionITP/auth/roles.service";
+import { userRolesService } from "@/services/evaluacionITP/auth/userRoles.service";
 import { Roles, UserRoles } from "@/lib/types/evaluacionInsitu";
 import { RolesView } from "./components/views/RolesView";
 import { UserRolesView } from "./components/views/UserRolesView";
@@ -51,12 +52,14 @@ export default function RolesPage() {
   const cargarDatos = async () => {
     try {
       setIsLoading(true);
-      const [rolesData, userRolesData] = await Promise.all([
+      const [rolesResponse, userRolesResponse] = await Promise.all([
         rolesService.getAll(),
         userRolesService.getAll()
       ]);
-      setRoles(rolesData);
-      setUserRoles(userRolesData);
+      
+      // Extract data from API responses
+      setRoles(rolesResponse.data || []);
+      setUserRoles(userRolesResponse.data || []);
     } catch (error) {
       console.error("❌ Error al cargar datos:", error);
       toast({
@@ -71,8 +74,8 @@ export default function RolesPage() {
 
   const cargarRoles = async () => {
     try {
-      const rolesData = await rolesService.getAll();
-      setRoles(rolesData);
+      const rolesResponse = await rolesService.getAll();
+      setRoles(rolesResponse.data || []);
     } catch (error) {
       console.error("❌ Error al cargar roles:", error);
       toast({
@@ -85,8 +88,8 @@ export default function RolesPage() {
 
   const cargarUserRoles = async () => {
     try {
-      const userRolesData = await userRolesService.getAll();
-      setUserRoles(userRolesData);
+      const userRolesResponse = await userRolesService.getAll();
+      setUserRoles(userRolesResponse.data || []);
     } catch (error) {
       console.error("❌ Error al cargar roles de usuario:", error);
       toast({

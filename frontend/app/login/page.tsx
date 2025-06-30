@@ -2,10 +2,10 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
-import { authService } from "@/lib/services/auth"
+import { authService } from "@/services/evaluacionITP/auth/auth.service"
 import { UserRound, Eye, EyeOff, LogIn } from "lucide-react"
 
 export default function LoginPage() {
@@ -151,19 +151,17 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4">
       
       {/* Contenedor principal con animación de entrada */}
-      <div className={`flex flex-col md:flex-row w-full max-w-4xl bg-white shadow-xl rounded-xl overflow-hidden transform transition-all duration-700 ease-out ${
+      <div className={`flex flex-col md:flex-row w-full max-w-7xl bg-white shadow-xl rounded-xl overflow-hidden transform transition-all duration-700 ease-out ${
         isPageLoaded ? 'translate-y-0 opacity-100 scale-100' : 'translate-y-8 opacity-0 scale-95'
       }`}>
         
         {/* Logo adaptable con animación */}
-        <div className={`flex items-center justify-center bg-white w-full md:w-1/2 p-4 transition-all duration-500 delay-200 ease-out ${
+        <div className={`flex items-center justify-center w-full md:w-2/2 transition-all duration-500 delay-200 ease-out bg-cover bg-center bg-no-repeat transform hover:scale-105 duration-300 ${
           isPageLoaded ? 'translate-x-0 opacity-100' : '-translate-x-6 opacity-0'
-        }`}>
-          <img
-            src="https://sibcolombia.net/wp-content/uploads/2017/08/logo-itp.png"
-            alt="Logo ITP"
-            className="w-2/3 md:w-80 transform hover:scale-105 transition-transform duration-300 ease-out"
-          />
+        }`}
+        style={{
+          backgroundImage: 'url(https://itp.edu.co/ITP2022/wp-content/uploads/2023/02/245216850_2524156664394432_3397011422600315621_n-scaled.jpg)',
+        }}>
         </div>
 
         {/* Formulario de Login con animación */}
@@ -172,16 +170,24 @@ export default function LoginPage() {
         }`}>
           
           <CardHeader className="text-center mb-2">
-            <CardTitle className="flex items-center justify-center gap-2 text-2xl font-semibold text-gray-800 transform hover:scale-105 transition-transform duration-200">
+            {/* Logo del ITP - Responsivo */}
+            <div className="flex justify-center mb-4">
+              <img 
+                src="https://sibcolombia.net/wp-content/uploads/2017/08/logo-itp.png" 
+                alt="Logo Instituto Tecnológico del Putumayo"
+                className="h-16 w-auto sm:h-20 md:h-24 lg:h-64 object-contain transform hover:scale-105 h-64 transition-transform duration-300"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none'
+                }}
+              />
+            </div>
+            
+            <CardTitle className="flex items-center justify-center gap-2 text-xl sm:text-2xl font-semibold text-gray-800 transform hover:scale-105 transition-transform duration-200">
               <LogIn size={24} />
               Evaluaciones Académicas
             </CardTitle>
-            <CardDescription className="text-sm text-gray-600 mt-1">
+            <CardDescription className="text-sm text-gray-600 mt-1 px-2">
               Solo para estudiantes{" "}
-              <span className="hover:scale-105 transition-transform duration-200 inline-block">
-                <strong>admitidos</strong>
-              </span>{" "}
-              y{" "}
               <span className="hover:scale-105 transition-transform duration-200 inline-block">
                 <strong>matriculados</strong>
               </span>.
@@ -263,18 +269,6 @@ export default function LoginPage() {
                 {getButtonContent()}
               </Button>
               
-              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-gray-100 transition-colors duration-200">
-                <p className="text-xs text-center text-gray-500">
-                  ¿Problemas para ingresar? Contacta a{" "}
-                  <a
-                    href="mailto:registroycontrol@itp.edu.co"
-                    className="text-blue-600 hover:text-blue-700 transition-colors duration-200 inline-block hover:scale-105 transform duration-200"
-                  >
-                    registroycontrol@itp.edu.co
-                  </a>
-                </p>
-              </div>
-
             </CardFooter>
           </form>
         </div>

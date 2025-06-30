@@ -19,7 +19,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card"
 import { Calendar, Settings, Clock, CheckCircle2 } from "lucide-react"
 import { ConfiguracionEvaluacion, TipoEvaluacion } from "@/lib/types/evaluacionInsitu"
-import { configuracionEvaluacionService, tiposEvaluacionesService } from "@/lib/services/evaluacionInsitu"
+import { configuracionEvaluacionService, tiposEvaluacionService } from "@/services"
 import { useToast } from "@/hooks/use-toast"
 
 interface ModalConfiguracionEvaluacionProps {
@@ -66,8 +66,8 @@ export function ModalConfiguracionEvaluacion({
   useEffect(() => {
     const fetchTiposEvaluacion = async () => {
       try {
-        const tipos = await tiposEvaluacionesService.getAll()
-        setTiposEvaluacion(tipos)
+        const tipos = await tiposEvaluacionService.getAll()
+        setTiposEvaluacion(tipos.data)
       } catch (error) {
         toast({
           title: "Error",

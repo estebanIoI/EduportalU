@@ -38,8 +38,8 @@ import {
 } from "@/lib/types/evaluacionInsitu";
 import {
   configuracionValoracionService,
-  escalaValoracionService,
-} from "@/lib/services/evaluacionInsitu";
+  escalasValoracionService,
+} from "@/services";
 import { useToast } from "@/hooks/use-toast";
 
 interface ModalConfiguracionValoracionProps {
@@ -81,8 +81,8 @@ export function ModalConfiguracionValoracion({
     if (!isOpen) return;
     const fetchValoraciones = async () => {
       try {
-        const data = await escalaValoracionService.getAll();
-        setValoraciones(data);
+        const data = await escalasValoracionService.getAll();
+        setValoraciones(data.data);
       } catch (error) {
         toast({
           title: "Error al cargar datos",

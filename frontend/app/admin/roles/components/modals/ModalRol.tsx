@@ -14,7 +14,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Shield, Edit3, Plus, AlertCircle, Users } from "lucide-react"
 import { Roles } from "@/lib/types/evaluacionInsitu"
-import { rolesService } from "@/lib/services/evaluacionInsitu"
+import { rolesService } from "@/services/evaluacionITP/auth/roles.service"
 import { useToast } from "@/hooks/use-toast"
 
 interface ModalRolProps {

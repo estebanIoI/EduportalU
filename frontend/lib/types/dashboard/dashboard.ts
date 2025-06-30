@@ -7,6 +7,12 @@ export interface DashboardParams {
   grupo?: string;
 }
 
+export interface FileDownloadResponse {
+  data: Blob;
+  headers: Record<string, any>;
+  filename?: string;
+}
+
 export interface DashboardStatsResponse {
   total_estudiantes: number;
   total_evaluaciones: number;

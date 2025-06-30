@@ -20,7 +20,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { UserCheck, Edit3, Plus, AlertCircle, User, Shield, Loader2, Search, X } from "lucide-react"
 import { UserRoles, Roles } from "@/lib/types/evaluacionInsitu"
-import { userRolesService, rolesService } from "@/lib/services/evaluacionInsitu"
+import { userRolesService } from "@/services/evaluacionITP/auth/userRoles.service"
+import { rolesService } from "@/services/evaluacionITP/auth/roles.service"
 import { useToast } from "@/hooks/use-toast"
 
 // Interfaz para el usuario buscado
@@ -68,7 +69,7 @@ export function ModalUserRol({
     setIsLoadingRoles(true)
     try {
       const rolesData = await rolesService.getAll()
-      setRoles(rolesData)
+      setRoles(rolesData.data)
     } catch (error: any) {
       const errorMessage = error?.response?.data?.message || "Error al cargar los roles"
       toast({
@@ -113,7 +114,7 @@ export function ModalUserRol({
       }
 
       // Normalizar respuesta
-      const normalizedUsers: User[] = Array.isArray(users) ? users : [users]
+      const normalizedUsers: User[] = Array.isArray(users.data) ? users.data : [users.data]
       
       // Validar estructura de cada usuario
       const validUsers = normalizedUsers.filter(user => 

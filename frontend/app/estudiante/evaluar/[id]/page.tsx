@@ -14,8 +14,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { tiposEvaluacionesService } from "@/lib/services/evaluacionInsitu/tiposEvaluaciones";
-import { createDetallesEvaluacion } from "@/lib/services/evaluacionInsitu/evaluacionDetalle";
+import { tiposEvaluacionService } from "@/services";
+import { evaluacionesDetalleService } from "@/services";
 import { ModalConfirmacionEvaluacion } from "@/app/estudiante/components/ModalConfirmacionEvaluacion";
 
 import type {
@@ -45,8 +45,8 @@ export default function EvaluarDocentePage({
   useEffect(() => {
     const fetchConfig = async () => {
       try {
-        const data = await tiposEvaluacionesService.getConfiguracion(id);
-        setConfig(data);
+        const data = await tiposEvaluacionService.getConfiguracion(id);
+        setConfig(data.data);
       } catch (err) {
         toast({
           title: "Error",
@@ -100,7 +100,7 @@ export default function EvaluarDocentePage({
   console.log("Payload a enviar:", bulkPayload);
   
   try {
-    await createDetallesEvaluacion(bulkPayload);
+    await evaluacionesDetalleService.createBulk(bulkPayload);
     
     // Usar el ID de configuración para redirigir al dashboard correcto
     router.push(`/estudiante/dashboard/${id}`);

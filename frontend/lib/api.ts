@@ -1,38 +1,20 @@
-import axios from 'axios';
+import { apiClient, ApiClient } from '@/services/api.client';
+import { authService } from '@/services/evaluacionITP/auth/auth.service';
 
-// Configuración base de axios
-const api = axios.create({
-  baseURL: 'http://localhost:5000/api/v1',
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+export { apiClient, ApiClient };
+export { authService };
 
-// Interceptor para agregar el token JWT a las peticiones
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => {
-    console.error('Error en interceptor de solicitudes:', error);
-    return Promise.reject(error);
-  }
-);
+export type {
+  ApiResponse,
+  ApiError,
+  CustomAxiosRequestConfig,
+  FailedQueueItem,
+  ApiConfig,
 
-// Interceptor para manejar errores
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    console.error('Error en interceptor de respuestas:', error);
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-    }
-    return Promise.reject(error);
-  }
-);
+} from '@/lib/types/api.types';
 
-export default api; 
+import { AuthTokens, RefreshTokenResponse } from '@/lib/types/auth.types'; 
+
+export { API_CONFIG, DEFAULT_HEADERS, getEnvironmentConfig } from '@/config/api.config';
+
+export default apiClient;

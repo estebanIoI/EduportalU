@@ -5,29 +5,22 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import Link from "next/link"
-import { authService } from "@/lib/services/auth"
+import { authService } from "@/services/evaluacionITP/auth/auth.service"
 import { PerfilEstudiante } from "@/lib/types/auth"
 import { Progress } from "@/components/ui/progress"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog" 
 import { useRouter } from "next/navigation"
-import { configuracionEvaluacionService, evaluacionService } from "@/lib/services/evaluacionInsitu"
-import { BulkEvaluacionesResponse, EvaluacionCreada, Evaluacion } from "@/lib/types/evaluacionInsitu";
+import { evaluacionesService } from "@/services"
+import { configuracionEvaluacionService } from "@/services/evaluacionITP/configuracion/configuracionEvaluacion.service"
+import { EvaluacionCreada } from "@/lib/types/evaluacionInsitu";
 import { ConfiguracionEvaluacion} from "@/lib/types/evaluacionInsitu"
 import { Calendar, Clock, FileText, Star, Timer, AlertCircle} from "lucide-react"
 import { ModalEvaluacionesCreadas } from "@/app/estudiante/components/ModalEvaluacionesCreadas"
+import { Header } from "../components/Header"
 
 export default function EstudianteBienvenida() {
   const router = useRouter()
   const { toast } = useToast()
   const [perfil, setPerfil] = useState<PerfilEstudiante | null>(null)
-  const [showProfileModal, setShowProfileModal] = useState(false)
   const [configuraciones, setConfiguraciones] = useState<ConfiguracionEvaluacion[]>([])
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -79,8 +72,13 @@ export default function EstudianteBienvenida() {
           configuracionEvaluacionService.getAll()
         ])
         
+        // Fix: Access the data property and ensure it's an array before filtering
+        const configuracionesData = Array.isArray(configResponse) 
+          ? configResponse 
+          : configResponse.data || []
+        
         // Filtrar solo configuraciones activas
-        const configuracionesActivas = configResponse.filter((config: ConfiguracionEvaluacion) => config.ACTIVO)
+        const configuracionesActivas = configuracionesData.filter((config: ConfiguracionEvaluacion) => config.ACTIVO)
         setConfiguraciones(configuracionesActivas)
       } catch (error) {
         console.error("Error al cargar configuraciones:", error)
@@ -96,6 +94,11 @@ export default function EstudianteBienvenida() {
 
     cargarConfiguraciones()
   }, [toast])
+
+  const handleLogout = () => {
+    // Limpiar datos locales si es necesario
+    router.push("/")
+  }
 
   const isEvaluacionVigente = (fechaInicio: string, fechaFin: string) => {
     const ahora = new Date()
@@ -159,7 +162,7 @@ export default function EstudianteBienvenida() {
     return 'normal'
   }
 
-const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) => {
+  const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) => {
     if (!perfil) {
       toast({
         title: "Error",
@@ -173,12 +176,19 @@ const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) =
     
     try {
       // Paso 1: Verificar si ya existen evaluaciones para esta configuración
-      const evaluacionesExistentes = await evaluacionService.getByEstudianteByConfiguracion(
+      const evaluacionesExistentes = await evaluacionesService.getByEstudianteByConfiguracion(
         perfil.documento, 
         configuracion.ID
       )
 
-      if (evaluacionesExistentes && evaluacionesExistentes.length > 0) {
+      // Normalizar la respuesta para manejar ambos formatos (Array directo o ApiResponse)
+      const evaluacionesArray = Array.isArray(evaluacionesExistentes) 
+        ? evaluacionesExistentes 
+        : (evaluacionesExistentes?.success && evaluacionesExistentes?.data) 
+          ? evaluacionesExistentes.data 
+          : [];
+
+      if (evaluacionesArray.length > 0) {
         // Caso: Las evaluaciones ya existen - redirigir al dashboard
         toast({
           title: "Evaluaciones encontradas",
@@ -201,7 +211,7 @@ const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) =
       await new Promise(resolve => setTimeout(resolve, 500))
       
       try {        
-        const response = await evaluacionService.createInsitu({ 
+        const response = await evaluacionesService.createInsitu({ 
           tipoEvaluacionId: configuracion.ID 
         })
                 
@@ -285,12 +295,19 @@ const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) =
           if (normalizedResponse.message?.toLowerCase().includes("ya exist") || 
               normalizedResponse.message?.toLowerCase().includes("already exist")) {
             
-            const evaluacionesVerificacion = await evaluacionService.getByEstudianteByConfiguracion(
+            const evaluacionesVerificacion = await evaluacionesService.getByEstudianteByConfiguracion(
               perfil.documento, 
               configuracion.ID
             )
+
+            // Normalizar la respuesta de verificación
+            const evaluacionesVerificacionArray = Array.isArray(evaluacionesVerificacion) 
+              ? evaluacionesVerificacion 
+              : (evaluacionesVerificacion?.success && evaluacionesVerificacion?.data) 
+                ? evaluacionesVerificacion.data 
+                : [];
                         
-            if (evaluacionesVerificacion && evaluacionesVerificacion.length > 0) {
+            if (evaluacionesVerificacionArray.length > 0) {
               
               await new Promise(resolve => setTimeout(resolve, 1500))
               
@@ -383,29 +400,9 @@ const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) =
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white p-4 shadow-sm flex justify-between items-center sticky top-0 z-40 backdrop-blur-sm bg-white/95">
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={() => setShowProfileModal(true)}
-            className="hover:bg-gray-100 transition-all duration-200 hover:scale-105"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-gray-900 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900 animate-fade-in">{perfil.nombre_completo}</h1>
-            <p className="text-sm text-gray-500 animate-fade-in-delay">Dashboard de Evaluaciones</p>
-          </div>
-        </div>
-        <Link href="/">
-          <Button variant="outline" size="sm" className="border-gray-900 text-gray-900 hover:bg-gray-100 transition-all duration-200 hover:shadow-md">
-            Cerrar Sesión
-          </Button>
-        </Link>
-      </header>
+      <Header
+        onLogout={handleLogout}
+      />
 
       <main className="container mx-auto p-6 max-w-6xl">
         {/* Evaluaciones Disponibles */}
@@ -629,46 +626,7 @@ const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) =
           )}
         </div>
 
-        {/* Modal de Perfil mejorado */}
-        <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
-          <DialogContent className="sm:max-w-3xl animate-fade-in-up">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
-                Información del Estudiante
-              </DialogTitle>
-              <div className="w-16 h-1 bg-gradient-to-r from-blue-500 to-green-500 mx-auto mt-2 rounded-full"></div>
-            </DialogHeader>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 py-6">
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-2xl p-4 transition-all duration-200 hover:bg-gray-100">
-                  <p className="text-sm font-medium text-gray-500 mb-1">Documento</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.tipo_doc} {perfil.documento}</p>
-                </div>
-                <div className="bg-gray-50 rounded-2xl p-4 transition-all duration-200 hover:bg-gray-100">
-                  <p className="text-sm font-medium text-gray-500 mb-2">Estado</p>
-                  <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 px-3 py-1 text-sm">
-                    {perfil.estado_matricula}
-                  </Badge>
-                </div>
-              </div>
-              <div className="space-y-6">
-                <div className="bg-gray-50 rounded-2xl p-4 transition-all duration-200 hover:bg-gray-100">
-                  <p className="text-sm font-medium text-gray-500 mb-1">Semestre</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.semestre}</p>
-                </div>
-                <div className="bg-gray-50 rounded-2xl p-4 transition-all duration-200 hover:bg-gray-100">
-                  <p className="text-sm font-medium text-gray-500 mb-1">Programa</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.programa}</p>
-                </div>
-                <div className="bg-gray-50 rounded-2xl p-4 transition-all duration-200 hover:bg-gray-100">
-                  <p className="text-sm font-medium text-gray-500 mb-1">Periodo</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.periodo}</p>
-                </div>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
+        
         <ModalEvaluacionesCreadas
           isOpen={modalEvaluacionesOpen}
           onClose={() => {

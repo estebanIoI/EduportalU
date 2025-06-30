@@ -13,7 +13,7 @@ import {
   Plus
 } from "lucide-react";
 import { TipoEvaluacion, ConfiguracionEvaluacion, EstadoActivo } from "@/lib/types/evaluacionInsitu";
-import { configuracionEvaluacionService } from "@/lib/services/evaluacionInsitu";
+import { configuracionEvaluacionService } from "@/services";
 import { Dispatch, SetStateAction } from "react";
 
 interface ConfiguracionViewProps {

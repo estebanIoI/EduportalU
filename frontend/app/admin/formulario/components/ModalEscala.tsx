@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Hash, Edit3, Plus, AlertCircle, Star } from "lucide-react"
 import { EscalaValoracion } from "@/lib/types/evaluacionInsitu"
-import { escalaValoracionService } from "@/lib/services/evaluacionInsitu"
+import { escalasValoracionService } from "@/services"
 import { useToast } from "@/hooks/use-toast"
 
 interface ModalEscalaProps {
@@ -84,14 +84,14 @@ export function ModalEscala({ isOpen, onClose, escala, onSuccess }: ModalEscalaP
       let response
       if (escala) {
         // Actualizando una escala existente
-        response = await escalaValoracionService.update(escala.ID, formData)
+        response = await escalasValoracionService.update(escala.ID, formData)
         toast({
           title: "¡Actualización exitosa!",
           description: "La escala de valoración se actualizó correctamente"
         })
       } else {
         // Creando una nueva escala
-        response = await escalaValoracionService.create(formData)
+        response = await escalasValoracionService.create(formData)
         toast({
           title: "¡Creación exitosa!",
           description: "Nueva escala de valoración creada"

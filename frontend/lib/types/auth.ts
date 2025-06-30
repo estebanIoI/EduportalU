@@ -24,6 +24,7 @@ export interface ErrorResponse {
   error: string;
 }
 
+// Tipos para materias y roles
 export interface MateriaEstudiante {
   id: number;
   codigo: number;
@@ -52,6 +53,7 @@ export interface Roles {
   adicionales: Rol[];
 }
 
+// Tipos para perfiles
 export interface PerfilEstudiante {
   tipo: "estudiante";
   sede: string;
@@ -84,4 +86,21 @@ export interface ProfileResponse {
   success: boolean;
   message: string;
   data: PerfilUsuario;
-} 
+}
+
+// Tipos adicionales para la nueva implementación
+export interface User {
+  id: number;
+  name: string;
+  username: string;
+  email?: string;
+  primaryRole: string;
+  additionalRoles: string[];
+}
+
+export interface AuthState {
+  isAuthenticated: boolean;
+  user: User | null;
+  loading: boolean;
+  error: string | null;
+}

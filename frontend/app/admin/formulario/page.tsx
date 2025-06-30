@@ -6,13 +6,13 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { 
-  tiposEvaluacionesService,
+  tiposEvaluacionService,
   configuracionEvaluacionService,
   aspectosEvaluacionService,
-  escalaValoracionService,
+  escalasValoracionService,
   configuracionAspectoService,
   configuracionValoracionService
-} from "@/lib/services/evaluacionInsitu";
+} from "@/services";
 import { TipoEvaluacion, AspectoEvaluacion, EscalaValoracion, ConfiguracionEvaluacion } from "@/lib/types/evaluacionInsitu";
 import { ModalTipoEvaluacion } from "./components/ModalTipoEvaluacion";
 import { ModalAspecto } from "./components/ModalAspecto";
@@ -84,16 +84,18 @@ export default function FormularioPage() {
 
   const cargarDatosIniciales = async () => {
     try {
-      const [tipos, aspectosData, escalasData, configuracionesData] = await Promise.all([
-        tiposEvaluacionesService.getAll(),
+      const [tiposResponse, aspectosResponse, escalasResponse, configuracionesResponse] = await Promise.all([
+        tiposEvaluacionService.getAll(),
         aspectosEvaluacionService.getAll(),
-        escalaValoracionService.getAll(),
+        escalasValoracionService.getAll(),
         configuracionEvaluacionService.getAll(),
       ]);
-      setTiposEvaluacion(tipos);
-      setAspectos(aspectosData);
-      setEscalas(escalasData);
-      setConfiguraciones(configuracionesData);
+      
+      // Extraer los datos de las respuestas de la API
+      setTiposEvaluacion(tiposResponse.data || []);
+      setAspectos(aspectosResponse.data || []);
+      setEscalas(escalasResponse.data || []);
+      setConfiguraciones(configuracionesResponse.data || []);
     } catch (error) {
       toast({
         title: "Error",
@@ -105,10 +107,13 @@ export default function FormularioPage() {
 
   const cargarDatosFiltrados = async (configuracionId: number) => {
     try {
-      const { configuracion, aspectos, valoraciones } = await tiposEvaluacionesService.getConfiguracion(configuracionId);
+      const response = await tiposEvaluacionService.getConfiguracion(configuracionId);
+      
+      // Extraer los datos de la respuesta de la API
+      const { configuracion, aspectos, valoraciones } = response.data || {};
 
-      setConfiguracionAspectos(aspectos);
-      setConfiguracionValoraciones(valoraciones);
+      setConfiguracionAspectos(aspectos || []);
+      setConfiguracionValoraciones(valoraciones || []);
 
       toast({
         title: "Éxito",
@@ -130,7 +135,7 @@ export default function FormularioPage() {
       title: "Eliminar Tipo de Evaluación",
       description: `¿Está seguro de eliminar el tipo de evaluación "${tipo.NOMBRE}"?`,
       onConfirm: async () => {
-        await tiposEvaluacionesService.delete(tipo.ID);
+        await tiposEvaluacionService.delete(tipo.ID);
         await cargarDatosIniciales();
       },
     });
@@ -154,7 +159,7 @@ export default function FormularioPage() {
       title: "Eliminar Escala",
       description: `¿Está seguro de eliminar la escala "${escala.ETIQUETA}"?`,
       onConfirm: async () => {
-        await escalaValoracionService.delete(escala.ID);
+        await escalasValoracionService.delete(escala.ID);
         await cargarDatosIniciales();
       },
     });

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { BarChart, FileText, Users, FileCode, Download, ChevronRight, Star, X, LogOut } from "lucide-react"
 import { toast } from "@/components/ui/use-toast"
-import { authService } from "@/lib/services/auth"
+import { authService } from "@/services"
 
 interface User {
   id: number

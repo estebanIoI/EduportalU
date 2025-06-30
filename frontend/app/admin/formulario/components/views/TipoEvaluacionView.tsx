@@ -13,7 +13,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { TipoEvaluacion, EstadoActivo } from "@/lib/types/evaluacionInsitu";
-import { tiposEvaluacionesService } from "@/lib/services/evaluacionInsitu";
+import { tiposEvaluacionService } from "@/services";
 
 interface TiposEvaluacionViewProps {
   tiposEvaluacion: TipoEvaluacion[];
@@ -39,7 +39,7 @@ export function TiposEvaluacionView({
         activo: !tipo.ACTIVO ? 1 : 0,
       };
 
-      await tiposEvaluacionesService.updateEstado(nuevoEstado);
+      await tiposEvaluacionService.updateEstado(nuevoEstado);
       refreshTipos();
     } catch (error) {
       console.error("Error al cambiar estado", error);

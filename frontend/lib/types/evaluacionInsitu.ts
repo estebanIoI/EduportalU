@@ -47,6 +47,18 @@ export interface ConfiguracionEvaluacion {
   ACTIVO: boolean;
 }
 
+export interface ConfiguracionEvaluacionInput {
+  TIPO_EVALUACION_ID: number;
+  FECHA_INICIO: string;
+  FECHA_FIN: string;
+  ACTIVO: boolean;
+}
+
+// Tipo para actualizar (incluye ID)
+export interface ConfiguracionEvaluacionUpdate extends ConfiguracionEvaluacionInput {
+  ID: number;
+}
+
 export interface ConfiguracionValoracion {
   ID: number;
   CONFIGURACION_EVALUACION_ID: number;

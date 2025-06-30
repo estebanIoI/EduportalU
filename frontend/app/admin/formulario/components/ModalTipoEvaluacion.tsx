@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Edit3, Plus, Check, AlertCircle } from "lucide-react";
 import { TipoEvaluacion } from "@/lib/types/evaluacionInsitu";
-import { tiposEvaluacionesService } from "@/lib/services/evaluacionInsitu";
+import { tiposEvaluacionService } from "@/services";
 import { useToast } from "@/hooks/use-toast";
 
 interface ModalTipoEvaluacionProps {
@@ -85,13 +85,13 @@ export function ModalTipoEvaluacion({
 
     try {
       if (tipo) {
-        await tiposEvaluacionesService.update(tipo.ID, formData);
+        await tiposEvaluacionService.update(tipo.ID, formData);
         toast({
           title: "¡Actualización exitosa!",
           description: "El tipo de evaluación se actualizó correctamente",
         });
       } else {
-        await tiposEvaluacionesService.create(formData);
+        await tiposEvaluacionService.create(formData);
         toast({
           title: "¡Creación exitosa!",
           description: "Nuevo tipo de evaluación creado",
@@ -224,7 +224,7 @@ export function ModalTipoEvaluacion({
                 </div>
                 <Switch
                   checked={formData.ACTIVO}
-                  onCheckedChange={(checked) => setFormData({ ...formData, ACTIVO: checked })}
+                  onCheckedChange={(checked: boolean) => setFormData({ ...formData, ACTIVO: checked })}
                 />
               </div>
             </form>

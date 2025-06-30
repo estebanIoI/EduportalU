@@ -2,9 +2,9 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { configuracionEvaluacionService } from "@/lib/services/evaluacionInsitu"
+import { configuracionEvaluacionService } from "@/services"
 import { ConfiguracionEvaluacion } from "@/lib/types/evaluacionInsitu"
-import { getSemestres, getPeriodos, getProgramas, getGrupos, getSedes } from "@/lib/services/vista/vistaAcademicaInsitu"
+import { vistaAcademicaService } from "@/services"
 import { Periodo, Semestre, Programa, Grupo, Sede } from "@/lib/types/vista/vistaAcademicaInsitu"
 import { ApiResponse } from "@/lib/types/dashboard/dashboard"
 
@@ -101,19 +101,19 @@ export default function Filtros({
           sedesResponse
         ] = await Promise.all([
           configuracionEvaluacionService.getAll(),
-          getSemestres(),
-          getPeriodos(),
-          getProgramas(),
-          getGrupos(),
-          getSedes()
+          vistaAcademicaService.getSemestres(),
+          vistaAcademicaService.getPeriodos(),
+          vistaAcademicaService.getProgramas(),
+          vistaAcademicaService.getGrupos(),
+          vistaAcademicaService.getSedes()
         ])
 
         const configuracionesData = extractData<ConfiguracionEvaluacion[]>(configsResponse)
-        const semestresData = extractData<Semestre[]>(semestresResponse)
-        const periodosData = extractData<Periodo[]>(periodosResponse)
-        const programasData = extractData<Programa[]>(programasResponse)
-        const gruposData = extractData<Grupo[]>(gruposResponse)
-        const sedesData = extractData<Sede[]>(sedesResponse)
+        const semestresData = extractData<Semestre[]>(semestresResponse.data)
+        const periodosData = extractData<Periodo[]>(periodosResponse.data)
+        const programasData = extractData<Programa[]>(programasResponse.data)
+        const gruposData = extractData<Grupo[]>(gruposResponse.data)
+        const sedesData = extractData<Sede[]>(sedesResponse.data)
 
         setConfiguraciones(configuracionesData)
         setSemestres(semestresData)

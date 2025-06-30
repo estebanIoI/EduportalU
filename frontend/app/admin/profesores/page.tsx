@@ -10,10 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Search, ChevronDown, ChevronRight, MessageSquare, Check, X, BookOpen, Download } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFormContext } from "@/lib/form-context"
-import { profesoresService } from "@/lib/services/profesores"
+import { profesoresService } from "@/services"
 import { AsignaturaDocente, AspectoPuntaje, ProfesoresParams } from "@/lib/types/profesores"
 import Filtros from "@/app/admin/components/filters"
-import api from "@/lib/api"
+import apiClient from "@/lib/api"
 
 interface FiltrosState {
   configuracionSeleccionada: number | null
@@ -79,7 +79,7 @@ export default function ProfesoresPage() {
     try {
       const params = convertirFiltrosAParams(filtrosActuales)
       const data = await profesoresService.getAsignaturas(params)
-      setAsignaturas(data)
+      setAsignaturas(data.data)
       
       setSelectedTeacher(null)
       setShowEvaluations(null)
@@ -169,7 +169,7 @@ export default function ProfesoresPage() {
     setLoadingAspectos(prev => ({ ...prev, [idDocente]: true }))
     try {
       const aspectos = await profesoresService.getAspectosPuntaje(idDocente)
-      setAspectosEvaluados(prev => ({ ...prev, [idDocente]: aspectos }))
+      setAspectosEvaluados(prev => ({ ...prev, [idDocente]: aspectos.data }))
     } catch (error) {
       console.error('Error al cargar aspectos:', error)
       toast({
@@ -302,7 +302,7 @@ export default function ProfesoresPage() {
     );
 
     // Llamar al endpoint usando axios con responseType 'blob'
-    const response = await api.get('/informe-docentes', {
+    const response = await apiClient.downloadFile('/informe-docentes', {
       params: filteredParams,
       responseType: 'blob', // Importante para manejar la descarga de archivos
     });
