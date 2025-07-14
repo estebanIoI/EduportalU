@@ -1,13 +1,17 @@
 // src/api/v1/controllers/evaluacion/configuracionValoracion.controller.js
-const ConfiguracionValoracionModel = require('../../models/evaluacion/configuracionValoracion.model');
+const ConfiguracionValoracionService = require('../../services/evaluacion/configuracionValoracion.service');
 const { successResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getConfiguraciones = async (req, res, next) => {
   try {
-    const configuraciones = await ConfiguracionValoracionModel.getAllConfiguraciones();
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: configuraciones });
+    const configuraciones = await ConfiguracionValoracionService.getAllConfiguraciones();
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: configuraciones,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -15,14 +19,18 @@ const getConfiguraciones = async (req, res, next) => {
 const getConfiguracionById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const configuracion = await ConfiguracionValoracionModel.getConfiguracionById(id);
+    const configuracion = await ConfiguracionValoracionService.getConfiguracionById(id);
     
     if (!configuracion) {
-      return errorResponse(res, { code: 404, message: MESSAGES.CONFIGURACION_VALORACION.NOT_FOUND });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
     
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: configuracion });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: configuracion,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -30,10 +38,14 @@ const getConfiguracionById = async (req, res, next) => {
 const createConfiguracion = async (req, res, next) => {
   try {
     const configuracionData = req.body;
-    const newConfiguracion = await ConfiguracionValoracionModel.createConfiguracion(configuracionData);
-
-    return successResponse(res, { code: 201, message: MESSAGES.GENERAL.CREATED, data: newConfiguracion });
+    const newConfiguracion = await ConfiguracionValoracionService.createConfiguracion(configuracionData);
+    return successResponse(res, {
+      code: 201,
+      message: MESSAGES.GENERAL.CREATED,
+      data: newConfiguracion,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
@@ -41,17 +53,21 @@ const createConfiguracion = async (req, res, next) => {
 const updateConfiguracion = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const configuracion = await ConfiguracionValoracionModel.getConfiguracionById(id);
+    const configuracion = await ConfiguracionValoracionService.getConfiguracionById(id);
 
     if (!configuracion) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
     const configuracionData = req.body;
-    const updatedConfiguracion = await ConfiguracionValoracionModel.updateConfiguracion(id, configuracionData);
+    const updatedConfiguracion = await ConfiguracionValoracionService.updateConfiguracion(id, configuracionData);
 
-    return successResponse(res, { message: MESSAGES.GENERAL.UPDATED, data: updatedConfiguracion });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
+      data: updatedConfiguracion,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -59,15 +75,18 @@ const updateConfiguracion = async (req, res, next) => {
 const deleteConfiguracion = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const configuracion = await ConfiguracionValoracionModel.getConfiguracionById(id);
+    const configuracion = await ConfiguracionValoracionService.getConfiguracionById(id);
     
     if (!configuracion) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    await ConfiguracionValoracionModel.deleteConfiguracion(id);
-    return successResponse(res, { message: MESSAGES.GENERAL.DELETED });
+    await ConfiguracionValoracionService.deleteConfiguracion(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.DELETED,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };
@@ -77,23 +96,23 @@ const updateEstadoConfiguracion = async (req, res, next) => {
     const { id } = req.params;
     const { activo } = req.body;
 
+    // Validación del estado
     if (typeof activo !== 'number' || (activo !== 0 && activo !== 1)) {
       return errorResponse(res, { code: 400, message: 'Valor de estado inválido' });
     }
 
-    const configuracion = await ConfiguracionValoracionModel.getConfiguracionById(id);
-
+    const configuracion = await ConfiguracionValoracionService.getConfiguracionById(id);
     if (!configuracion) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    const updated = await ConfiguracionValoracionModel.updateEstado(id, activo);
-
+    const updated = await ConfiguracionValoracionService.updateEstado(id, activo);
     return successResponse(res, {
       message: MESSAGES.GENERAL.UPDATED,
-      data: updated
+      data: updated,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -104,5 +123,5 @@ module.exports = {
   createConfiguracion,
   updateConfiguracion,
   deleteConfiguracion,
-  updateEstadoConfiguracion
+  updateEstadoConfiguracion,
 };

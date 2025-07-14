@@ -1,14 +1,17 @@
 // src/api/v1/controllers/evaluacion/evaluacionDetalle.controller.js
-const EvaluacionDetalleModel = require('../../models/evaluacion/evaluacionDetalle.model');
+const EvaluacionDetalleService = require('../../services/evaluacion/evaluacionDetalle.service');
 const { successResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
-const EvaluacionesModel = require('../../models/evaluacion/evaluaciones.model');
 
 const getDetalles = async (req, res, next) => {
   try {
-    const detalles = await EvaluacionDetalleModel.getAllDetalles();
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: detalles });
+    const detalles = await EvaluacionDetalleService.getAllDetalles();
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: detalles,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -16,14 +19,18 @@ const getDetalles = async (req, res, next) => {
 const getDetalleById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const detalle = await EvaluacionDetalleModel.getDetalleById(id);
+    const detalle = await EvaluacionDetalleService.getDetalleById(id);
     
     if (!detalle) {
-      return errorResponse(res, { code: 404, message: MESSAGES.EVALUACION_DETALLE.NOT_FOUND });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
     
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: detalle });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: detalle,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -31,10 +38,13 @@ const getDetalleById = async (req, res, next) => {
 const createDetalle = async (req, res, next) => {
   try {
     const detalleData = req.body;
-    const newDetalle = await EvaluacionDetalleModel.createDetalle(detalleData);
-
-    return successResponse(res, { code: 201, message: MESSAGES.GENERAL.CREATED, data: newDetalle });
+    const newDetalle = await EvaluacionDetalleService.createDetalle(detalleData);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.CREATED,
+      data: newDetalle,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
@@ -42,17 +52,21 @@ const createDetalle = async (req, res, next) => {
 const updateDetalle = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const detalle = await EvaluacionDetalleModel.getDetalleById(id);
+    const detalle = await EvaluacionDetalleService.getDetalleById(id);
 
     if (!detalle) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
     const detalleData = req.body;
-    const updatedDetalle = await EvaluacionDetalleModel.updateDetalle(id, detalleData);
+    const updatedDetalle = await EvaluacionDetalleService.updateDetalle(id, detalleData);
 
-    return successResponse(res, { message: MESSAGES.GENERAL.UPDATED, data: updatedDetalle });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
+      data: updatedDetalle,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -60,15 +74,18 @@ const updateDetalle = async (req, res, next) => {
 const deleteDetalle = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const detalle = await EvaluacionDetalleModel.getDetalleById(id);
+    const detalle = await EvaluacionDetalleService.getDetalleById(id);
     
     if (!detalle) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    await EvaluacionDetalleModel.deleteDetalle(id);
-    return successResponse(res, { message: MESSAGES.GENERAL.DELETED });
+    await EvaluacionDetalleService.deleteDetalle(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.DELETED,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };
@@ -77,50 +94,25 @@ const createDetallesEvaluacion = async (req, res, next) => {
   try {
     const { evaluacionId, detalles, comentarioGeneral } = req.body;
 
-    // Validar que la evaluación exista
-    const evaluacion = await EvaluacionesModel.getEvaluacionById(evaluacionId);
-    if (!evaluacion) {
-      return errorResponse(res, { 
-        code: 404, 
-        message: "La evaluación no existe" 
-      });
-    }
-
-    // Actualizar el comentario general en la evaluación
-    await EvaluacionesModel.updateEvaluacion(evaluacionId, {
-      ...evaluacion,
-      COMENTARIO_GENERAL: comentarioGeneral
-    });
-
-    // Preparar los detalles para inserción masiva
-    const detallesFormateados = detalles.map(detalle => ({
-      EVALUACION_ID: evaluacionId,
-      ASPECTO_ID: detalle.aspectoId,
-      VALORACION_ID: detalle.valoracionId,
-      COMENTARIO: detalle.comentario || null
-    }));
-
-    // Crear todos los detalles
-    const detallesCreados = await EvaluacionDetalleModel.bulkCreate(detallesFormateados);
+    const result = await EvaluacionDetalleService.createDetallesEvaluacion(
+      evaluacionId,
+      detalles,
+      comentarioGeneral
+    );
 
     return successResponse(res, {
-      code: 201,
       message: "Detalles de evaluación creados exitosamente",
-      data: {
-        evaluacion: {
-          ...evaluacion,
-          COMENTARIO_GENERAL: comentarioGeneral
-        },
-        detalles: detallesCreados
-      }
+      data: result,
     });
   } catch (error) {
-    console.error('Error al crear detalles de evaluación:', error);
-    return errorResponse(res, {
-      code: 500,
-      message: MESSAGES.GENERAL.ERROR,
-      error: error.message
-    });
+    if (error.message === 'La evaluación no existe') {
+      return errorResponse(res, {
+        code: 404,
+        message: error.message,
+      });
+    }
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
+    next(error);
   }
 };
 
@@ -130,5 +122,5 @@ module.exports = {
   createDetalle,
   updateDetalle,
   deleteDetalle,
-  createDetallesEvaluacion
+  createDetallesEvaluacion,
 };

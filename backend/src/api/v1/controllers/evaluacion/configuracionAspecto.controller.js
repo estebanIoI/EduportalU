@@ -1,13 +1,17 @@
 // src/api/v1/controllers/evaluacion/configuracionAspecto.controller.js
-const ConfiguracionAspectoModel = require('../../models/evaluacion/configuracionAspecto.model');
+const ConfiguracionAspectoService = require('../../services/evaluacion/configuracionAspecto.service');
 const { successResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getConfiguracionesAspecto = async (req, res, next) => {
   try {
-    const configuracionesAspecto = await ConfiguracionAspectoModel.getAllConfiguracionesAspecto();
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: configuracionesAspecto });
+    const configuracionesAspecto = await ConfiguracionAspectoService.getAllConfiguracionesAspecto();
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: configuracionesAspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -15,14 +19,18 @@ const getConfiguracionesAspecto = async (req, res, next) => {
 const getConfiguracionAspectoById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const configuracionAspecto = await ConfiguracionAspectoModel.getConfiguracionAspectoById(id);
+    const configuracionAspecto = await ConfiguracionAspectoService.getConfiguracionAspectoById(id);
     
     if (!configuracionAspecto) {
-      return errorResponse(res, { code: 404, message: MESSAGES.CONFIGURACION_ASPECTO.NOT_FOUND });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
     
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: configuracionAspecto });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: configuracionAspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -30,10 +38,14 @@ const getConfiguracionAspectoById = async (req, res, next) => {
 const createConfiguracionAspecto = async (req, res, next) => {
   try {
     const configuracionAspectoData = req.body;
-    const newConfiguracionAspecto = await ConfiguracionAspectoModel.createConfiguracionAspecto(configuracionAspectoData);
-
-    return successResponse(res, { code: 201, message: MESSAGES.GENERAL.CREATED, data: newConfiguracionAspecto });
+    const newConfiguracionAspecto = await ConfiguracionAspectoService.createConfiguracionAspecto(configuracionAspectoData);
+    return successResponse(res, {
+      code: 201,
+      message: MESSAGES.GENERAL.CREATED,
+      data: newConfiguracionAspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
@@ -41,17 +53,21 @@ const createConfiguracionAspecto = async (req, res, next) => {
 const updateConfiguracionAspecto = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const configuracionAspecto = await ConfiguracionAspectoModel.getConfiguracionAspectoById(id);
+    const configuracionAspecto = await ConfiguracionAspectoService.getConfiguracionAspectoById(id);
 
     if (!configuracionAspecto) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
     const configuracionAspectoData = req.body;
-    const updatedConfiguracionAspecto = await ConfiguracionAspectoModel.updateConfiguracionAspecto(id, configuracionAspectoData);
+    const updatedConfiguracionAspecto = await ConfiguracionAspectoService.updateConfiguracionAspecto(id, configuracionAspectoData);
 
-    return successResponse(res, { message: MESSAGES.GENERAL.UPDATED, data: updatedConfiguracionAspecto });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
+      data: updatedConfiguracionAspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -59,15 +75,18 @@ const updateConfiguracionAspecto = async (req, res, next) => {
 const deleteConfiguracionAspecto = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const configuracionAspecto = await ConfiguracionAspectoModel.getConfiguracionAspectoById(id);
+    const configuracionAspecto = await ConfiguracionAspectoService.getConfiguracionAspectoById(id);
     
     if (!configuracionAspecto) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    await ConfiguracionAspectoModel.deleteConfiguracionAspecto(id);
-    return successResponse(res, { message: MESSAGES.GENERAL.DELETED });
+    await ConfiguracionAspectoService.deleteConfiguracionAspecto(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.DELETED,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };
@@ -77,23 +96,23 @@ const updateEstadoConfiguracionAspecto = async (req, res, next) => {
     const { id } = req.params;
     const { activo } = req.body;
 
+    // Validación del estado
     if (typeof activo !== 'number' || (activo !== 0 && activo !== 1)) {
       return errorResponse(res, { code: 400, message: 'Valor de estado inválido' });
     }
 
-    const configuracion = await ConfiguracionAspectoModel.getConfiguracionAspectoById(id);
-
+    const configuracion = await ConfiguracionAspectoService.getConfiguracionAspectoById(id);
     if (!configuracion) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    const updated = await ConfiguracionAspectoModel.updateEstado(id, activo);
-
+    const updated = await ConfiguracionAspectoService.updateEstado(id, activo);
     return successResponse(res, {
       message: MESSAGES.GENERAL.UPDATED,
-      data: updated
+      data: updated,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -104,5 +123,5 @@ module.exports = {
   createConfiguracionAspecto,
   updateConfiguracionAspecto,
   deleteConfiguracionAspecto,
-  updateEstadoConfiguracionAspecto
+  updateEstadoConfiguracionAspecto,
 };

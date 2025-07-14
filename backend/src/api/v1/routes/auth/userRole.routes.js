@@ -14,7 +14,7 @@ const {
 // Aplicar verificación de token a todas las rutas
 router.use(verifyToken);
 
-router.get('/search/:username', searchUser);
+router.get('/search/:username', checkRole(['Admin']), searchUser);
 
 // Obtener todos los roles asignados (solo Admin)
 router.get('/', checkRole(['Admin']), getAllUserRoles);

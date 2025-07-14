@@ -1,122 +1,92 @@
-const UserRoleModel = require('../../models/auth/userRole.model');
-const { successResponse, errorResponse } = require('../../utils/responseHandler');
+const userRoleService = require('../../services/auth/userRole.service');
+const { successResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
-// Obtener roles de un usuario específico
 const getUserRoles = async (req, res, next) => {
   try {
     const { userId } = req.params;
-    const roles = await UserRoleModel.getUserRoles(userId);
+    const roles = await userRoleService.getUserRoles(userId);
+
     return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
       data: roles,
-      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
-    console.error('Error fetching user roles:', error);
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
 
-// Obtener todos los roles asignados
 const getAllUserRoles = async (req, res, next) => {
   try {
-    const allRoles = await UserRoleModel.getAllUserRoles();
+    const allRoles = await userRoleService.getAllUserRoles();
+
     return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
       data: allRoles,
-      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
-    console.error('Error fetching all user roles:', error);
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
 
 const searchUser = async (req, res, next) => {
   try {
-    // Obtener el username desde los parámetros de la URL o query string
-    const { username } = req.params; // Si viene por URL: /search/:username
-    // O si prefieres por query: const { username } = req.query; // /search?username=valor
-    
-    // Validar que se proporcione el username
-    if (!username) {
-      return res.status(400).json({
-        success: false,
-        message: 'Username is required'
-      });
-    }
-
-    // Buscar el usuario
-    const user = await UserRoleModel.searchUser(username);
-    
-    // Verificar si se encontró el usuario
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
+    const { username } = req.params;
+    const user = await userRoleService.searchUser(username);
 
     return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
       data: user,
-      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
-    console.error('Error searching user:', error);
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
 
-// Asignar un rol a un usuario
 const assignRole = async (req, res, next) => {
   try {
     const { userId, roleId } = req.body;
+    const newRole = await userRoleService.assignRole(userId, roleId);
 
-    const hasRole = await UserRoleModel.hasRole(userId, roleId);
-    if (hasRole) {
-      return errorResponse(res, {
-        code: 400,
-        message: 'El usuario ya tiene asignado este rol.'
-      });
-    }
-
-    const newRole = await UserRoleModel.assignRole(userId, roleId);
     return successResponse(res, {
+      message: MESSAGES.GENERAL.CREATED,
       data: newRole,
-      message: MESSAGES.GENERAL.CREATED
-    });
+    }, 201);
   } catch (error) {
-    console.error('Error assigning role:', error);
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
 
-// Actualizar el rol asignado
 const updateRole = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { roleId } = req.body;
+    const updatedRole = await userRoleService.updateRole(id, roleId);
 
-    const updatedRole = await UserRoleModel.updateRoleAssignment(id, roleId);
     return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
       data: updatedRole,
-      message: MESSAGES.GENERAL.UPDATED
     });
   } catch (error) {
-    console.error('Error updating role:', error);
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
 
-// Eliminar un rol asignado
 const removeRole = async (req, res, next) => {
   try {
     const { id } = req.params;
-    await UserRoleModel.removeRole(id);
+    await userRoleService.removeRole(id);
+
     return successResponse(res, {
-      message: MESSAGES.GENERAL.DELETED
+      message: MESSAGES.GENERAL.DELETED,
     });
   } catch (error) {
-    console.error('Error removing role:', error);
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };

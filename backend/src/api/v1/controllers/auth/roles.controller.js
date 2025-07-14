@@ -1,10 +1,16 @@
-const RolesModel = require('../../models/auth/roles.model');
+const RolesService = require('../../services/auth/roles.service');
+const { successResponse } = require('../../utils/responseHandler');
+const MESSAGES = require('../../../../constants/messages');
 
 const getRoles = async (req, res, next) => {
   try {
-    const roles = await RolesModel.getAllRoles();
-    return res.status(200).json({ success: true, data: roles });
+    const roles = await RolesService.getAllRoles();
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: roles,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -12,14 +18,13 @@ const getRoles = async (req, res, next) => {
 const getRolById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const rol = await RolesModel.getRolById(id);
-
-    if (!rol) {
-      return res.status(404).json({ success: false, message: 'Rol no encontrado' });
-    }
-
-    return res.status(200).json({ success: true, data: rol });
+    const rol = await RolesService.getRolById(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: rol,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -27,9 +32,13 @@ const getRolById = async (req, res, next) => {
 const createRol = async (req, res, next) => {
   try {
     const rolData = req.body;
-    const newRol = await RolesModel.createRol(rolData);
-    return res.status(201).json({ success: true, data: newRol });
+    const newRol = await RolesService.createRol(rolData);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.CREATED,
+      data: newRol,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
@@ -38,15 +47,13 @@ const updateRol = async (req, res, next) => {
   try {
     const { id } = req.params;
     const rolData = req.body;
-
-    const rol = await RolesModel.getRolById(id);
-    if (!rol) {
-      return res.status(404).json({ success: false, message: 'Rol no encontrado' });
-    }
-
-    const updatedRol = await RolesModel.updateRol(id, rolData);
-    return res.status(200).json({ success: true, data: updatedRol });
+    const updatedRol = await RolesService.updateRol(id, rolData);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
+      data: updatedRol,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -54,15 +61,12 @@ const updateRol = async (req, res, next) => {
 const deleteRol = async (req, res, next) => {
   try {
     const { id } = req.params;
-
-    const rol = await RolesModel.getRolById(id);
-    if (!rol) {
-      return res.status(404).json({ success: false, message: 'Rol no encontrado' });
-    }
-
-    await RolesModel.deleteRol(id);
-    return res.status(200).json({ success: true, message: 'Rol eliminado correctamente' });
+    await RolesService.deleteRol(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.DELETED,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };

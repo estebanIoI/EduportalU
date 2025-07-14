@@ -1,17 +1,17 @@
 // src/api/v1/controllers/evaluacion/escalaValoracion.controller.js
-const EscalaValoracionModel = require('../../models/evaluacion/escalaValoracion.model');
+const EscalaValoracionService = require('../../services/evaluacion/escalaValoracion.service');
 const { successResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getEscalas = async (req, res, next) => {
   try {
-    const escalas = await EscalaValoracionModel.getAllEscalas();
-    return successResponse(res, { 
-      code: 200, 
-      message: MESSAGES.GENERAL.FETCH_SUCCESS, 
-      data: escalas 
+    const escalas = await EscalaValoracionService.getAllEscalas();
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: escalas,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -19,21 +19,18 @@ const getEscalas = async (req, res, next) => {
 const getEscalaById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const escala = await EscalaValoracionModel.getEscalaById(id);
+    const escala = await EscalaValoracionService.getEscalaById(id);
     
     if (!escala) {
-      return errorResponse(res, { 
-        code: 404, 
-        message: MESSAGES.GENERAL.NOT_FOUND 
-      });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
     
-    return successResponse(res, { 
-      code: 200, 
-      message: MESSAGES.GENERAL.FETCH_SUCCESS, 
-      data: escala 
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: escala,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -41,14 +38,13 @@ const getEscalaById = async (req, res, next) => {
 const createEscala = async (req, res, next) => {
   try {
     const escalaData = req.body;
-
-    const newEscala = await EscalaValoracionModel.createEscala(escalaData);
-    return successResponse(res, { 
-      code: 201, 
-      message: MESSAGES.GENERAL.CREATED, 
-      data: newEscala 
+    const newEscala = await EscalaValoracionService.createEscala(escalaData);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.CREATED,
+      data: newEscala,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
@@ -56,23 +52,21 @@ const createEscala = async (req, res, next) => {
 const updateEscala = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const escalaData = req.body;
-    
-    const escala = await EscalaValoracionModel.getEscalaById(id);
+    const escala = await EscalaValoracionService.getEscalaById(id);
+
     if (!escala) {
-      return errorResponse(res, { 
-        code: 404, 
-        message: MESSAGES.GENERAL.NOT_FOUND 
-      });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    const updatedEscala = await EscalaValoracionModel.updateEscala(id, escalaData);
-    return successResponse(res, { 
-      code: 200, 
-      message: MESSAGES.GENERAL.UPDATED, 
-      data: updatedEscala 
+    const escalaData = req.body;
+    const updatedEscala = await EscalaValoracionService.updateEscala(id, escalaData);
+
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
+      data: updatedEscala,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -80,21 +74,18 @@ const updateEscala = async (req, res, next) => {
 const deleteEscala = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const escala = await EscalaValoracionService.getEscalaById(id);
     
-    const escala = await EscalaValoracionModel.getEscalaById(id);
     if (!escala) {
-      return errorResponse(res, { 
-        code: 404, 
-        message: MESSAGES.GENERAL.NOT_FOUND 
-      });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
-    
-    await EscalaValoracionModel.deleteEscala(id);
-    return successResponse(res, { 
-      code: 200, 
-      message: MESSAGES.GENERAL.DELETED 
+
+    await EscalaValoracionService.deleteEscala(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.DELETED,
     });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };
@@ -104,5 +95,5 @@ module.exports = {
   getEscalaById,
   createEscala,
   updateEscala,
-  deleteEscala
+  deleteEscala,
 };

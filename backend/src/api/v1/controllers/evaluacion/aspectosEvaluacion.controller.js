@@ -1,13 +1,17 @@
 // src/api/v1/controllers/evaluacion/aspectosEvaluacion.controller.js
-const AspectosEvaluacionModel = require('../../models/evaluacion/aspectosEvaluacion.model');
+const AspectosEvaluacionService = require('../../services/evaluacion/aspectosEvaluacion.service');
 const { successResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getAspectos = async (req, res, next) => {
   try {
-    const aspectos = await AspectosEvaluacionModel.getAllAspectos();
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: aspectos });
+    const aspectos = await AspectosEvaluacionService.getAllAspectos();
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: aspectos,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -15,14 +19,18 @@ const getAspectos = async (req, res, next) => {
 const getAspectoById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const aspecto = await AspectosEvaluacionModel.getAspectoById(id);
+    const aspecto = await AspectosEvaluacionService.getAspectoById(id);
     
     if (!aspecto) {
-      return errorResponse(res, { code: 404, message: MESSAGES.ASPECTOS.NOT_FOUND });
+      return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
     
-    return successResponse(res, { message: MESSAGES.GENERAL.FETCH_SUCCESS, data: aspecto });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: aspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
     next(error);
   }
 };
@@ -30,10 +38,13 @@ const getAspectoById = async (req, res, next) => {
 const createAspecto = async (req, res, next) => {
   try {
     const aspectoData = req.body;
-    const newAspecto = await AspectosEvaluacionModel.createAspecto(aspectoData);
-
-    return successResponse(res, { code: 201, message: MESSAGES.GENERAL.CREATED, data: newAspecto });
+    const newAspecto = await AspectosEvaluacionService.createAspecto(aspectoData);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.CREATED,
+      data: newAspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.CREATED_ERROR;
     next(error);
   }
 };
@@ -41,17 +52,21 @@ const createAspecto = async (req, res, next) => {
 const updateAspecto = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const aspecto = await AspectosEvaluacionModel.getAspectoById(id);
+    const aspecto = await AspectosEvaluacionService.getAspectoById(id);
 
     if (!aspecto) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
     const aspectoData = req.body;
-    const updatedAspecto = await AspectosEvaluacionModel.updateAspecto(id, aspectoData);
+    const updatedAspecto = await AspectosEvaluacionService.updateAspecto(id, aspectoData);
 
-    return successResponse(res, { message: MESSAGES.GENERAL.UPDATED, data: updatedAspecto });
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.UPDATED,
+      data: updatedAspecto,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }
 };
@@ -59,15 +74,18 @@ const updateAspecto = async (req, res, next) => {
 const deleteAspecto = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const aspecto = await AspectosEvaluacionModel.getAspectoById(id);
+    const aspecto = await AspectosEvaluacionService.getAspectoById(id);
     
     if (!aspecto) {
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
-    await AspectosEvaluacionModel.deleteAspecto(id);
-    return successResponse(res, { message: MESSAGES.GENERAL.DELETED });
+    await AspectosEvaluacionService.deleteAspecto(id);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.DELETED,
+    });
   } catch (error) {
+    error.message = MESSAGES.GENERAL.DELETED_ERROR;
     next(error);
   }
 };
@@ -77,5 +95,5 @@ module.exports = {
   getAspectoById,
   createAspecto,
   updateAspecto,
-  deleteAspecto
+  deleteAspecto,
 };
