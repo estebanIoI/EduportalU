@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { configuracionEvaluacionService } from "@/services"
 import { ConfiguracionEvaluacion } from "@/lib/types/evaluacionInsitu"
 import { vistaAcademicaService } from "@/services"
-import { Periodo, Semestre, Programa, Grupo, Sede } from "@/lib/types/vista/vistaAcademicaInsitu"
-import { ApiResponse } from "@/lib/types/dashboard/dashboard"
+import { Periodo } from "@/lib/types/vista/vistaAcademicaInsitu"
+import { ApiResponse } from "@/lib/types/api.types"
 
 interface FiltrosState {
   configuracionSeleccionada: number | null
@@ -24,11 +24,28 @@ interface FiltrosProps {
   loading?: boolean
 }
 
-function extractData<T extends object>(response: T | ApiResponse<T>): T {
-  if ('success' in response && 'data' in response) {
-    return response.data
-  }
-  return response
+interface OpcionFiltro {
+  value: string
+  label: string
+}
+
+interface OpcionesFiltrosResponse {
+  sedes?: OpcionFiltro[]
+  programas?: OpcionFiltro[]
+  semestres?: OpcionFiltro[]
+  grupos?: OpcionFiltro[]
+}
+
+interface FiltrosDinamicos {
+  periodo: string
+  sede?: string
+  programa?: string
+  semestre?: string
+  grupo?: string
+}
+
+function extractData<T>(response: ApiResponse<T>): T {
+  return response.data
 }
 
 // Función para formatear fechas
@@ -41,7 +58,7 @@ const formatearFecha = (fechaISO: string): string => {
       day: 'numeric'
     });
   } catch (error) {
-    return fechaISO; // Retornar fecha original si hay error
+    return fechaISO;
   }
 };
 
@@ -53,19 +70,16 @@ export default function Filtros({
 }: FiltrosProps) {
   // Estados para las opciones de los selects
   const [configuraciones, setConfiguraciones] = useState<ConfiguracionEvaluacion[]>([])
-  const [semestres, setSemestres] = useState<Semestre[]>([])
   const [periodos, setPeriodos] = useState<Periodo[]>([])
-  const [programas, setProgramas] = useState<Programa[]>([])
-  const [grupos, setGrupos] = useState<Grupo[]>([])
-  const [sedes, setSedes] = useState<Sede[]>([])
+  const [opcionesFiltros, setOpcionesFiltros] = useState<OpcionesFiltrosResponse>({})
   const [loadingData, setLoadingData] = useState(true)
+  const [loadingOpciones, setLoadingOpciones] = useState(false)
   const [mostrarConfiguracion, setMostrarConfiguracion] = useState(false)
 
   // Función para obtener el periodo más reciente
   const obtenerPeriodoMasReciente = (periodos: Periodo[]): string | null => {
     if (!periodos || periodos.length === 0) return null;
     
-    // Filtrar periodos únicos y válidos
     const periodosUnicos = periodos
       .filter((periodo, index, self) => 
         periodo.PERIODO && 
@@ -73,96 +87,155 @@ export default function Filtros({
       )
       .map(p => p.PERIODO)
       .sort((a, b) => {
-        // Separar año y semestre para comparar correctamente
         const [anoA, semestreA] = a.split('-').map(Number);
         const [anoB, semestreB] = b.split('-').map(Number);
         
-        // Primero comparar por año, luego por semestre
         if (anoA !== anoB) {
-          return anoB - anoA; // Orden descendente por año
+          return anoB - anoA;
         }
-        return semestreB - semestreA; // Orden descendente por semestre
+        return semestreB - semestreA;
       });
     
     return periodosUnicos.length > 0 ? periodosUnicos[0] : null;
   };
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales (configuraciones y periodos)
   useEffect(() => {
-    const cargarDatos = async () => {
+    const cargarDatosIniciales = async () => {
       try {
         setLoadingData(true)
-        const [
-          configsResponse,
-          semestresResponse,
-          periodosResponse,
-          programasResponse,
-          gruposResponse,
-          sedesResponse
-        ] = await Promise.all([
+        const [configsResponse, periodosResponse] = await Promise.all([
           configuracionEvaluacionService.getAll(),
-          vistaAcademicaService.getSemestres(),
-          vistaAcademicaService.getPeriodos(),
-          vistaAcademicaService.getProgramas(),
-          vistaAcademicaService.getGrupos(),
-          vistaAcademicaService.getSedes()
+          vistaAcademicaService.getPeriodos()
         ])
 
         const configuracionesData = extractData<ConfiguracionEvaluacion[]>(configsResponse)
-        const semestresData = extractData<Semestre[]>(semestresResponse.data)
-        const periodosData = extractData<Periodo[]>(periodosResponse.data)
-        const programasData = extractData<Programa[]>(programasResponse.data)
-        const gruposData = extractData<Grupo[]>(gruposResponse.data)
-        const sedesData = extractData<Sede[]>(sedesResponse.data)
+        
+        // Fix for the first error: Handle the PeriodosResponse type mismatch
+        // Extract data properly from the periodosResponse
+        let periodosData: Periodo[] = []
+        if (periodosResponse && 'data' in periodosResponse) {
+          if (Array.isArray(periodosResponse.data)) {
+            periodosData = periodosResponse.data
+          } else if (periodosResponse.data && Array.isArray(periodosResponse.data)) {
+            periodosData = periodosResponse.data
+          }
+        }
 
         setConfiguraciones(configuracionesData)
-        setSemestres(semestresData)
         setPeriodos(periodosData)
-        setProgramas(programasData)
-        setGrupos(gruposData)
-        setSedes(sedesData)
 
-        
-      // Crear un objeto con los nuevos filtros
-      let nuevosFiltros = { ...filtros };
+        // Crear un objeto con los nuevos filtros
+        let nuevosFiltros = { ...filtros };
 
-      // Si no hay configuración seleccionada, seleccionar la activa por defecto
-      if (!filtros.configuracionSeleccionada && Array.isArray(configuracionesData) && configuracionesData.length > 0) {
-        const configuracionActiva = configuracionesData.find((config) => config.ACTIVO)
-        const configuracionPorDefecto = configuracionActiva || configuracionesData[0]
-        
-        nuevosFiltros.configuracionSeleccionada = configuracionPorDefecto.ID;
-      }
-
-      // Si no hay periodo seleccionado, seleccionar el más reciente automáticamente
-      if (!filtros.periodoSeleccionado && Array.isArray(periodosData) && periodosData.length > 0) {
-        const periodoMasReciente = obtenerPeriodoMasReciente(periodosData);
-        if (periodoMasReciente) {
-          nuevosFiltros.periodoSeleccionado = periodoMasReciente;
+        // Si no hay configuración seleccionada, seleccionar la activa por defecto
+        if (!filtros.configuracionSeleccionada && Array.isArray(configuracionesData) && configuracionesData.length > 0) {
+          const configuracionActiva = configuracionesData.find((config) => config.ACTIVO)
+          const configuracionPorDefecto = configuracionActiva || configuracionesData[0]
+          nuevosFiltros.configuracionSeleccionada = configuracionPorDefecto.ID;
         }
-      }
 
-      // Aplicar los cambios si hay alguna modificación
-      if (nuevosFiltros.configuracionSeleccionada !== filtros.configuracionSeleccionada || 
-          nuevosFiltros.periodoSeleccionado !== filtros.periodoSeleccionado) {
-        onFiltrosChange(nuevosFiltros);
-      }
+        // Si no hay periodo seleccionado, seleccionar el más reciente automáticamente
+        if (!filtros.periodoSeleccionado && Array.isArray(periodosData) && periodosData.length > 0) {
+          const periodoMasReciente = obtenerPeriodoMasReciente(periodosData);
+          if (periodoMasReciente) {
+            nuevosFiltros.periodoSeleccionado = periodoMasReciente;
+          }
+        }
 
-    } catch (error) {
-      console.error("Error cargando datos de filtros:", error)
-    } finally {
-      setLoadingData(false)
+        // Aplicar los cambios si hay alguna modificación
+        if (nuevosFiltros.configuracionSeleccionada !== filtros.configuracionSeleccionada || 
+            nuevosFiltros.periodoSeleccionado !== filtros.periodoSeleccionado) {
+          onFiltrosChange(nuevosFiltros);
+        }
+
+      } catch (error) {
+        console.error("Error cargando datos iniciales:", error)
+      } finally {
+        setLoadingData(false)
+      }
     }
-  }
 
-    cargarDatos()
+    cargarDatosIniciales()
   }, [])
 
+  // Cargar opciones de filtros dinámicos basados en las selecciones actuales
+  useEffect(() => {
+    const cargarOpcionesFiltros = async () => {
+      // Solo cargar opciones si hay un periodo seleccionado (requerido por el backend)
+      if (!filtros.periodoSeleccionado) {
+        setOpcionesFiltros({})
+        return
+      }
+
+      try {
+        setLoadingOpciones(true)
+        
+        // Construir filtros para enviar al backend
+        const filtrosDinamicos: FiltrosDinamicos = {
+          periodo: filtros.periodoSeleccionado,
+          ...(filtros.sedeSeleccionada && { sede: filtros.sedeSeleccionada }),
+          ...(filtros.programaSeleccionado && { programa: filtros.programaSeleccionado }),
+          ...(filtros.semestreSeleccionado && { semestre: filtros.semestreSeleccionado }),
+          ...(filtros.grupoSeleccionado && { grupo: filtros.grupoSeleccionado })
+        }
+
+        const response = await vistaAcademicaService.getOpcionesFiltros(filtrosDinamicos)
+        
+        // Fix for the second error: Handle the response type properly
+        let opciones: OpcionesFiltrosResponse = {}
+        
+        if (response && typeof response === 'object') {
+          // If response is ApiResponse type
+          if ('data' in response && response.data) {
+            opciones = response.data as OpcionesFiltrosResponse
+          } 
+          // If response is already the data object
+          else if ('sedes' in response || 'programas' in response || 'semestres' in response || 'grupos' in response) {
+            opciones = response as OpcionesFiltrosResponse
+          }
+        }
+        
+        setOpcionesFiltros(opciones)
+
+      } catch (error) {
+        console.error("Error cargando opciones de filtros:", error)
+        setOpcionesFiltros({})
+      } finally {
+        setLoadingOpciones(false)
+      }
+    }
+
+    cargarOpcionesFiltros()
+  }, [filtros.periodoSeleccionado, filtros.sedeSeleccionada, filtros.programaSeleccionado, filtros.semestreSeleccionado, filtros.grupoSeleccionado])
+
   const handleFiltroChange = (campo: keyof FiltrosState, valor: string | number) => {
-    onFiltrosChange({
-      ...filtros,
-      [campo]: valor
-    })
+    const nuevosFiltros = { ...filtros, [campo]: valor }
+    
+    // Si cambia el periodo, limpiar los demás filtros dependientes
+    if (campo === 'periodoSeleccionado') {
+      nuevosFiltros.sedeSeleccionada = ''
+      nuevosFiltros.programaSeleccionado = ''
+      nuevosFiltros.semestreSeleccionado = ''
+      nuevosFiltros.grupoSeleccionado = ''
+    }
+    // Si cambia sede, limpiar filtros que dependen de ella
+    else if (campo === 'sedeSeleccionada') {
+      nuevosFiltros.programaSeleccionado = ''
+      nuevosFiltros.semestreSeleccionado = ''
+      nuevosFiltros.grupoSeleccionado = ''
+    }
+    // Si cambia programa, limpiar filtros que dependen de él
+    else if (campo === 'programaSeleccionado') {
+      nuevosFiltros.semestreSeleccionado = ''
+      nuevosFiltros.grupoSeleccionado = ''
+    }
+    // Si cambia semestre, limpiar grupo
+    else if (campo === 'semestreSeleccionado') {
+      nuevosFiltros.grupoSeleccionado = ''
+    }
+    
+    onFiltrosChange(nuevosFiltros)
   }
 
   // Obtener información de la configuración seleccionada
@@ -225,7 +298,7 @@ export default function Filtros({
           {/* Selector de Periodo */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Periodo
+              Periodo *
             </label>
             <select
               value={filtros.periodoSeleccionado}
@@ -233,7 +306,7 @@ export default function Filtros({
               disabled={loading}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">Todos</option>
+              <option value="">Selecciona periodo</option>
               {periodos
                 .filter((periodo, index, self) => 
                   periodo.PERIODO && 
@@ -255,21 +328,19 @@ export default function Filtros({
             <select
               value={filtros.sedeSeleccionada}
               onChange={(e) => handleFiltroChange('sedeSeleccionada', e.target.value)}
-              disabled={loading}
+              disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">Todas</option>
-              {sedes
-                .filter((sede, index, self) => 
-                  sede.NOMBRE_SEDE && 
-                  self.findIndex(s => s.NOMBRE_SEDE === sede.NOMBRE_SEDE) === index
-                )
-                .map((sede, index) => (
-                  <option key={`sede-${sede.NOMBRE_SEDE}-${index}`} value={sede.NOMBRE_SEDE}>
-                    {sede.NOMBRE_SEDE}
-                  </option>
-                ))}
+              <option value="">Todas las sedes</option>
+              {opcionesFiltros.sedes?.map((sede) => (
+                <option key={sede.value} value={sede.value}>
+                  {sede.label}
+                </option>
+              ))}
             </select>
+            {loadingOpciones && (
+              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+            )}
           </div>
 
           {/* Selector de Programa */}
@@ -280,21 +351,19 @@ export default function Filtros({
             <select
               value={filtros.programaSeleccionado}
               onChange={(e) => handleFiltroChange('programaSeleccionado', e.target.value)}
-              disabled={loading}
+              disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">Todos</option>
-              {programas
-                .filter((programa, index, self) => 
-                  programa.NOM_PROGRAMA && 
-                  self.findIndex(p => p.NOM_PROGRAMA === programa.NOM_PROGRAMA) === index
-                )
-                .map((programa, index) => (
-                  <option key={`programa-${programa.NOM_PROGRAMA}-${index}`} value={programa.NOM_PROGRAMA}>
-                    {programa.NOM_PROGRAMA}
-                  </option>
-                ))}
+              <option value="">Todos los programas</option>
+              {opcionesFiltros.programas?.map((programa) => (
+                <option key={programa.value} value={programa.value}>
+                  {programa.label}
+                </option>
+              ))}
             </select>
+            {loadingOpciones && (
+              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+            )}
           </div>
 
           {/* Selector de Semestre */}
@@ -305,21 +374,19 @@ export default function Filtros({
             <select
               value={filtros.semestreSeleccionado}
               onChange={(e) => handleFiltroChange('semestreSeleccionado', e.target.value)}
-              disabled={loading}
+              disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">Todos</option>
-              {semestres
-                .filter((semestre, index, self) => 
-                  semestre.SEMESTRE && 
-                  self.findIndex(s => s.SEMESTRE === semestre.SEMESTRE) === index
-                )
-                .map((semestre, index) => (
-                  <option key={`semestre-${semestre.SEMESTRE}-${index}`} value={semestre.SEMESTRE}>
-                    {semestre.SEMESTRE}
-                  </option>
-                ))}
+              <option value="">Todos los semestres</option>
+              {opcionesFiltros.semestres?.map((semestre) => (
+                <option key={semestre.value} value={semestre.value}>
+                  {semestre.label}
+                </option>
+              ))}
             </select>
+            {loadingOpciones && (
+              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+            )}
           </div>
 
           {/* Selector de Grupo */}
@@ -330,21 +397,19 @@ export default function Filtros({
             <select
               value={filtros.grupoSeleccionado}
               onChange={(e) => handleFiltroChange('grupoSeleccionado', e.target.value)}
-              disabled={loading}
+              disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
               className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <option value="">Todos</option>
-              {grupos
-                .filter((grupo, index, self) => 
-                  grupo.GRUPO && 
-                  self.findIndex(g => g.GRUPO === grupo.GRUPO) === index
-                )
-                .map((grupo, index) => (
-                  <option key={`grupo-${grupo.GRUPO}-${index}`} value={grupo.GRUPO}>
-                    {grupo.GRUPO}
-                  </option>
-                ))}
+              <option value="">Todos los grupos</option>
+              {opcionesFiltros.grupos?.map((grupo) => (
+                <option key={grupo.value} value={grupo.value}>
+                  {grupo.label}
+                </option>
+              ))}
             </select>
+            {loadingOpciones && (
+              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+            )}
           </div>
         </div>
 

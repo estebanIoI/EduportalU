@@ -50,10 +50,161 @@ const VistaAcademica = {
     }
   },
 
+  // NUEVO MÉTODO PARA OBTENER OPCIONES DISPONIBLES
+  getOpcionesFiltros: async (filters) => {
+    try {
+      const pool = getRemotePool();
+      const opciones = {};
+
+      // Construir filtros comunes (PERIODO es obligatorio)
+      const baseWhere = 'WHERE PERIODO = ?';
+      const baseParams = [filters.periodo];
+
+      // SEDES (aplica filtros excepto "sede")
+      {
+        let where = baseWhere;
+        const params = [...baseParams];
+
+        if (filters.programa) {
+          where += ' AND NOM_PROGRAMA = ?';
+          params.push(filters.programa);
+        }
+        if (filters.semestre) {
+          where += ' AND SEMESTRE = ?';
+          params.push(filters.semestre);
+        }
+        if (filters.grupo) {
+          where += ' AND GRUPO = ?';
+          params.push(filters.grupo);
+        }
+
+        const sedesQuery = `
+          SELECT DISTINCT NOMBRE_SEDE as value, NOMBRE_SEDE as label
+          FROM vista_academica_insitus 
+          ${where}
+          ORDER BY NOMBRE_SEDE
+        `;
+        const [sedes] = await pool.query(sedesQuery, params);
+        opciones.sedes = sedes;
+      }
+
+      // PROGRAMAS (aplica filtros excepto "programa")
+      {
+        let where = baseWhere;
+        const params = [...baseParams];
+
+        if (filters.sede) {
+          where += ' AND NOMBRE_SEDE = ?';
+          params.push(filters.sede);
+        }
+        if (filters.semestre) {
+          where += ' AND SEMESTRE = ?';
+          params.push(filters.semestre);
+        }
+        if (filters.grupo) {
+          where += ' AND GRUPO = ?';
+          params.push(filters.grupo);
+        }
+
+        const programasQuery = `
+          SELECT DISTINCT NOM_PROGRAMA as value, NOM_PROGRAMA as label
+          FROM vista_academica_insitus 
+          ${where}
+          ORDER BY NOM_PROGRAMA
+        `;
+        const [programas] = await pool.query(programasQuery, params);
+        opciones.programas = programas;
+      }
+
+      // SEMESTRES (aplica filtros excepto "semestre") - ORDEN NATURAL
+      {
+        let where = baseWhere;
+        const params = [...baseParams];
+
+        if (filters.sede) {
+          where += ' AND NOMBRE_SEDE = ?';
+          params.push(filters.sede);
+        }
+        if (filters.programa) {
+          where += ' AND NOM_PROGRAMA = ?';
+          params.push(filters.programa);
+        }
+        if (filters.grupo) {
+          where += ' AND GRUPO = ?';
+          params.push(filters.grupo);
+        }
+
+        const semestresQuery = `
+          SELECT DISTINCT SEMESTRE as value, SEMESTRE as label
+          FROM vista_academica_insitus 
+          ${where}
+          ORDER BY 
+            CASE SEMESTRE
+              WHEN 'PRIMER SEMESTRE' THEN 1
+              WHEN 'SEGUNDO SEMESTRE' THEN 2
+              WHEN 'TERCER SEMESTRE' THEN 3
+              WHEN 'CUARTO SEMESTRE' THEN 4
+              WHEN 'QUINTO SEMESTRE' THEN 5
+              WHEN 'SEXTO SEMESTRE' THEN 6
+              WHEN 'SÉPTIMO SEMESTRE' THEN 7
+              WHEN 'SEPTIMO SEMESTRE' THEN 7
+              WHEN 'OCTAVO SEMESTRE' THEN 8
+              WHEN 'NOVENO SEMESTRE' THEN 9
+              WHEN 'DÉCIMO SEMESTRE' THEN 10
+              WHEN 'DECIMO SEMESTRE' THEN 10
+              WHEN 'UNDÉCIMO SEMESTRE' THEN 11
+              WHEN 'UNDECIMO SEMESTRE' THEN 11
+              WHEN 'DUODÉCIMO SEMESTRE' THEN 12
+              WHEN 'DUODECIMO SEMESTRE' THEN 12
+              ELSE 999
+            END
+        `;
+        const [semestres] = await pool.query(semestresQuery, params);
+        opciones.semestres = semestres;
+      }
+
+      // GRUPOS (aplica filtros excepto "grupo")
+      {
+        let where = baseWhere;
+        const params = [...baseParams];
+
+        if (filters.sede) {
+          where += ' AND NOMBRE_SEDE = ?';
+          params.push(filters.sede);
+        }
+        if (filters.programa) {
+          where += ' AND NOM_PROGRAMA = ?';
+          params.push(filters.programa);
+        }
+        if (filters.semestre) {
+          where += ' AND SEMESTRE = ?';
+          params.push(filters.semestre);
+        }
+
+        const gruposQuery = `
+          SELECT DISTINCT GRUPO as value, GRUPO as label
+          FROM vista_academica_insitus 
+          ${where}
+          ORDER BY GRUPO
+        `;
+        const [grupos] = await pool.query(gruposQuery, params);
+        opciones.grupos = grupos;
+      }
+
+      return opciones;
+    } catch (error) {
+      console.error(`Error en getOpcionesFiltros: ${error.message}`);
+      throw error;
+    }
+  },
+
+
+
+  // Métodos existentes para compatibilidad
   getPeriodos: async () => {
     try {
       const pool = getRemotePool();
-      const [rows] = await pool.query('SELECT DISTINCT PERIODO FROM vista_academica_insitus');
+      const [rows] = await pool.query('SELECT DISTINCT PERIODO FROM vista_academica_insitus ORDER BY PERIODO DESC');
       return rows;
     } catch (error) {
       console.error(`Error al obtener periodos: ${error.message}`);
@@ -64,7 +215,7 @@ const VistaAcademica = {
   getSedes: async () => {
     try {
       const pool = getRemotePool();
-      const [rows] = await pool.query('SELECT DISTINCT NOMBRE_SEDE FROM vista_academica_insitus');
+      const [rows] = await pool.query('SELECT DISTINCT NOMBRE_SEDE as value, NOMBRE_SEDE as label FROM vista_academica_insitus ORDER BY NOMBRE_SEDE');
       return rows;
     } catch (error) {
       console.error(`Error al obtener sedes: ${error.message}`);
@@ -75,7 +226,7 @@ const VistaAcademica = {
   getProgramas: async () => {
     try {
       const pool = getRemotePool();
-      const [rows] = await pool.query('SELECT DISTINCT NOM_PROGRAMA FROM vista_academica_insitus');
+      const [rows] = await pool.query('SELECT DISTINCT NOM_PROGRAMA as value, NOM_PROGRAMA as label FROM vista_academica_insitus ORDER BY NOM_PROGRAMA');
       return rows;
     } catch (error) {
       console.error(`Error al obtener programas: ${error.message}`);
@@ -86,7 +237,7 @@ const VistaAcademica = {
   getSemestres: async () => {
     try {
       const pool = getRemotePool();
-      const [rows] = await pool.query('SELECT DISTINCT SEMESTRE FROM vista_academica_insitus');
+      const [rows] = await pool.query('SELECT DISTINCT SEMESTRE as value, SEMESTRE as label FROM vista_academica_insitus ORDER BY SEMESTRE');
       return rows;
     } catch (error) {
       console.error(`Error al obtener semestres: ${error.message}`);
@@ -97,7 +248,7 @@ const VistaAcademica = {
   getGrupos: async () => {
     try {
       const pool = getRemotePool();
-      const [rows] = await pool.query('SELECT DISTINCT GRUPO FROM vista_academica_insitus');
+      const [rows] = await pool.query('SELECT DISTINCT GRUPO as value, GRUPO as label FROM vista_academica_insitus ORDER BY GRUPO');
       return rows;
     } catch (error) {
       console.error(`Error al obtener grupos: ${error.message}`);

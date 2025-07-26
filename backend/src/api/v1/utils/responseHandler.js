@@ -8,6 +8,15 @@ const successResponse = (res, { code = 200, message = '', data = null }) => {
   });
 };
 
+const successPaginatedResponse = (res, { code = 200, message = '', data = null, pagination = null }) => {
+  return res.status(code).json({
+    success: true,
+    message,
+    data,
+    pagination
+  });
+};
+
 const errorResponse = (res, { code = 400, message = 'Error', error = null }) => {
   return res.status(code).json({
     success: false,
@@ -18,5 +27,6 @@ const errorResponse = (res, { code = 400, message = 'Error', error = null }) => 
 
 module.exports = {
   successResponse,
+  successPaginatedResponse,
   errorResponse
 };

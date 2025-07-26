@@ -1,6 +1,6 @@
 // src/api/v1/controllers/evaluacion/tiposEvaluaciones.controller.js
 const TiposEvaluacionService = require('../../services/evaluacion/tiposEvaluaciones.service');
-const { successResponse, errorResponse } = require('../../utils/responseHandler');
+const { successResponse, successPaginatedResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getConfiguracionDetalles = async (req, res, next) => {
@@ -48,10 +48,15 @@ const updateEstadoTipo = async (req, res, next) => {
 
 const getTipos = async (req, res, next) => {
   try {
-    const tipos = await TiposEvaluacionService.getAllTipos();
-    return successResponse(res, { 
-      message: MESSAGES.GENERAL.FETCH_SUCCESS, 
-      data: tipos 
+    const { pagination } = req;
+    const tipos = await TiposEvaluacionService.getAllTipos(pagination);
+
+    const paginatedResponse = res.paginate(tipos.data, tipos.totalCount);
+
+    return successPaginatedResponse(res, {
+      data: paginatedResponse.data,
+      pagination: paginatedResponse.pagination,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
     error.message = MESSAGES.GENERAL.FETCH_ERROR;

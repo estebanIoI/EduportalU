@@ -1,6 +1,15 @@
 const { getPool, getRemotePool } = require('../../../../db');
 
 // ======================================
+// CONFIGURACIÓN DEL SISTEMA
+// ======================================
+
+const RANKING_CONFIG = {
+  K_FACTOR: 20, // Número de estudiantes necesarios para confianza completa
+  MIN_EVALUACIONES: 3, // Mínimo de evaluaciones para aparecer en ranking
+};
+
+// ======================================
 // UTILIDADES COMPARTIDAS
 // ======================================
 
@@ -97,6 +106,29 @@ const calcularPromedio = (valores) => {
 const calcularPorcentaje = (numerador, denominador) => {
   if (denominador === 0) return 0;
   return Math.round((numerador / denominador) * 100 * 100) / 100;
+};
+
+/**
+ * Aplica ajuste bayesiano al puntaje
+ * @param {number} promedioReal - Promedio real del docente
+ * @param {number} totalEstudiantes - Número de estudiantes que evaluaron
+ * @param {number} mediaGlobal - Media global de todos los docentes
+ * @param {number} kFactor - Factor K para el ajuste
+ * @returns {number} - Puntaje ajustado
+ */
+const aplicarAjusteBayesiano = (promedioReal, totalEstudiantes, mediaGlobal, kFactor = RANKING_CONFIG.K_FACTOR) => {
+  const puntajeAjustado = (mediaGlobal * kFactor + promedioReal * totalEstudiantes) / (kFactor + totalEstudiantes);
+  return parseFloat(puntajeAjustado.toFixed(4));
+};
+
+/**
+ * Calcula factor de confianza (0-1)
+ * @param {number} totalEstudiantes - Número de estudiantes
+ * @param {number} kFactor - Factor K
+ * @returns {number} - Factor de confianza
+ */
+const calcularFactorConfianza = (totalEstudiantes, kFactor = RANKING_CONFIG.K_FACTOR) => {
+  return parseFloat((totalEstudiantes / (totalEstudiantes + kFactor)).toFixed(3));
 };
 
 // ======================================
@@ -202,6 +234,54 @@ const calculateEvaluatedTeachers = (docentes, estudianteAsignatura, evaluaciones
 // ======================================
 
 /**
+ * Obtiene estadísticas globales para ajuste bayesiano
+ * @param {number} idConfiguracion - ID de configuración
+ * @param {Array} estudiantesAsignaturasUnicos - Combinaciones únicas estudiante-asignatura
+ * @returns {Object} - Estadísticas globales
+ */
+const getEstadisticasGlobales = async (idConfiguracion, estudiantesAsignaturasUnicos) => {
+  if (estudiantesAsignaturasUnicos.length === 0) return { mediaGlobal: 0.5, totalDocentes: 0 };
+  
+  const pool = await getPool();
+  const { placeholders, params } = createInPlaceholders(
+    estudiantesAsignaturasUnicos.map(ea => ({
+      estudiante: ea.estudiante,
+      asignatura: ea.asignatura
+    }))
+  );
+  
+  const query = `
+    WITH promedios_docente AS (
+      SELECT 
+        e.DOCUMENTO_DOCENTE,
+        AVG(cv.PUNTAJE) as promedio_docente,
+        COUNT(DISTINCT e.DOCUMENTO_ESTUDIANTE) as total_estudiantes
+      FROM evaluaciones e
+      JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
+      JOIN configuracion_valoracion cv ON ed.VALORACION_ID = cv.VALORACION_ID
+      WHERE e.ID_CONFIGURACION = ?
+        AND cv.ACTIVO = TRUE
+        AND (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
+      GROUP BY e.DOCUMENTO_DOCENTE
+      HAVING COUNT(DISTINCT e.DOCUMENTO_ESTUDIANTE) >= ?
+    )
+    SELECT 
+      AVG(promedio_docente) as media_global,
+      COUNT(*) as total_docentes,
+      STDDEV(promedio_docente) as desviacion_estandar
+    FROM promedios_docente
+  `;
+  
+  const [resultado] = await pool.query(query, [idConfiguracion, ...params, RANKING_CONFIG.MIN_EVALUACIONES]);
+  
+  return {
+    mediaGlobal: parseFloat(resultado[0]?.media_global || 0.5),
+    totalDocentes: parseInt(resultado[0]?.total_docentes || 0),
+    desviacionEstandar: parseFloat(resultado[0]?.desviacion_estandar || 0)
+  };
+};
+
+/**
  * Obtiene evaluaciones con puntajes para ranking/podio
  * @param {number} idConfiguracion - ID de configuración
  * @param {Array} estudiantesAsignaturasUnicos - Combinaciones únicas estudiante-asignatura
@@ -220,18 +300,20 @@ const getEvaluationsWithScores = async (idConfiguracion, estudiantesAsignaturasU
 
   const evaluacionesQuery = `
     SELECT 
+      e.ID,
       e.DOCUMENTO_ESTUDIANTE,
+      e.DOCUMENTO_DOCENTE,
       e.CODIGO_MATERIA,
+      e.ID_CONFIGURACION,
+      ed.ID as detalle_id,
       cv.PUNTAJE,
       ca.ASPECTO_ID
     FROM evaluaciones e
-    JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
-    JOIN configuracion_valoracion cv ON ed.VALORACION_ID = cv.VALORACION_ID
-    JOIN configuracion_aspecto ca ON ed.ASPECTO_ID = ca.ID
+    LEFT JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
+    LEFT JOIN configuracion_valoracion cv ON ed.VALORACION_ID = cv.VALORACION_ID AND cv.ACTIVO = TRUE
+    LEFT JOIN configuracion_aspecto ca ON ed.ASPECTO_ID = ca.ID AND ca.ACTIVO = TRUE
     WHERE e.ID_CONFIGURACION = ?
       AND (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
-      AND ca.ACTIVO = TRUE
-      AND cv.ACTIVO = TRUE
   `;
 
   const [evaluacionesData] = await pool.query(evaluacionesQuery, [idConfiguracion, ...params]);
@@ -285,17 +367,40 @@ const initializeTeachersMap = (vistaData) => {
  * @param {Array} evaluacionesData - Datos de evaluaciones
  */
 const processEvaluationsForTeachers = (docentesMap, evaluacionesData) => {
-  evaluacionesData.forEach(eval => {
+  // Primero agrupar por evaluación (e.ID)
+  const evaluacionesAgrupadas = evaluacionesData.reduce((acc, eval) => {
+    if (!acc[eval.ID]) {
+      acc[eval.ID] = {
+        ...eval,
+        detalles: []
+      };
+    }
+    if (eval.detalle_id) {
+      acc[eval.ID].detalles.push({
+        puntaje: parseFloat(eval.PUNTAJE),
+        aspecto_id: eval.ASPECTO_ID
+      });
+    }
+    return acc;
+  }, {});
+
+  // Procesar cada evaluación agrupada
+  Object.values(evaluacionesAgrupadas).forEach(eval => {
     const estudianteAsignatura = `${eval.DOCUMENTO_ESTUDIANTE}-${eval.CODIGO_MATERIA}`;
     
     for (let [docenteKey, docente] of docentesMap) {
       if (docente.estudiante_asignatura_docente.has(estudianteAsignatura)) {
+        // Marcar como evaluación realizada
         docente.evaluaciones_realizadas.add(estudianteAsignatura);
-        docente.total_respuestas++;
         
-        const puntaje = parseFloat(eval.PUNTAJE);
-        if (!isNaN(puntaje)) {
-          docente.puntajes.push(puntaje);
+        // Solo contar como completa si tiene detalles
+        if (eval.detalles.length > 0) {
+          docente.total_respuestas += eval.detalles.length;
+          eval.detalles.forEach(detalle => {
+            if (!isNaN(detalle.puntaje)) {
+              docente.puntajes.push(detalle.puntaje);
+            }
+          });
         }
         
         break;
@@ -305,11 +410,12 @@ const processEvaluationsForTeachers = (docentesMap, evaluacionesData) => {
 };
 
 /**
- * Calcula métricas finales para docentes
+ * Calcula métricas finales para docentes con ajuste bayesiano
  * @param {Map} docentesMap - Mapa de docentes con datos procesados
+ * @param {Object} estadisticasGlobales - Estadísticas globales para ajuste
  * @returns {Array} - Array de docentes con métricas calculadas
  */
-const calculateTeacherMetrics = (docentesMap) => {
+const calculateTeacherMetrics = (docentesMap, estadisticasGlobales) => {
   return Array.from(docentesMap.values())
     .map(docente => {
       const evaluaciones_esperadas = docente.evaluaciones_esperadas.size;
@@ -318,7 +424,16 @@ const calculateTeacherMetrics = (docentesMap) => {
       const total_estudiantes = docente.estudiantes.size;
       const total_asignaturas = docente.asignaturas.size;
       
-      const promedio_general = calcularPromedio(docente.puntajes);
+      const promedio_real = calcularPromedio(docente.puntajes);
+      
+      // NUEVO: Aplicar ajuste bayesiano
+      const puntaje_ajustado = aplicarAjusteBayesiano(
+        promedio_real,
+        total_estudiantes,
+        estadisticasGlobales.mediaGlobal
+      );
+      
+      const factor_confianza = calcularFactorConfianza(total_estudiantes);
       
       const respuestas_por_estudiante = total_estudiantes > 0 
         ? parseFloat((docente.total_respuestas / total_estudiantes).toFixed(2))
@@ -338,7 +453,9 @@ const calculateTeacherMetrics = (docentesMap) => {
         GRUPO: docente.GRUPO,
         TOTAL_ESTUDIANTES: total_estudiantes,
         TOTAL_ASIGNATURAS: total_asignaturas,
-        PROMEDIO_GENERAL: promedio_general,
+        PROMEDIO_GENERAL: promedio_real, // Mantener el nombre original
+        PUNTAJE_AJUSTADO: puntaje_ajustado, // NUEVO campo
+        FACTOR_CONFIANZA: factor_confianza, // NUEVO campo
         TOTAL_RESPUESTAS: docente.total_respuestas,
         EVALUACIONES_ESPERADAS: evaluaciones_esperadas,
         EVALUACIONES_REALIZADAS: evaluaciones_realizadas,
@@ -347,49 +464,56 @@ const calculateTeacherMetrics = (docentesMap) => {
         EFICIENCIA_RESPUESTAS: eficiencia_respuestas
       };
     })
-    .filter(docente => docente.TOTAL_RESPUESTAS > 0);
+    .filter(docente => docente.TOTAL_RESPUESTAS >= RANKING_CONFIG.MIN_EVALUACIONES);
 };
 
 /**
- * Ordena docentes para ranking
+ * Ordena docentes para ranking usando puntaje ajustado
  * @param {Array} docentes - Array de docentes con métricas
  * @returns {Array} - Docentes ordenados para ranking
  */
 const sortTeachersForRanking = (docentes) => {
   return docentes.sort((a, b) => {
-    if (b.PROMEDIO_GENERAL !== a.PROMEDIO_GENERAL) {
-      return b.PROMEDIO_GENERAL - a.PROMEDIO_GENERAL;
+    // Criterio principal: Puntaje ajustado
+    if (Math.abs(b.PUNTAJE_AJUSTADO - a.PUNTAJE_AJUSTADO) > 0.001) {
+      return b.PUNTAJE_AJUSTADO - a.PUNTAJE_AJUSTADO;
     }
+    // Criterio secundario: Factor de confianza
+    if (Math.abs(b.FACTOR_CONFIANZA - a.FACTOR_CONFIANZA) > 0.01) {
+      return b.FACTOR_CONFIANZA - a.FACTOR_CONFIANZA;
+    }
+    // Criterio terciario: Respuestas por estudiante
     if (b.RESPUESTAS_POR_ESTUDIANTE !== a.RESPUESTAS_POR_ESTUDIANTE) {
       return b.RESPUESTAS_POR_ESTUDIANTE - a.RESPUESTAS_POR_ESTUDIANTE;
     }
+    // Criterio final: ID docente para consistencia
     return a.ID_DOCENTE - b.ID_DOCENTE;
   });
 };
 
 /**
- * Crea el podio con mejores y peores docentes
+ * Crea el podio con mejores y peores docentes usando puntaje ajustado
  * @param {Array} docentes - Array de docentes con métricas
  * @returns {Array} - Podio con top mejores y peores
  */
 const createPodium = (docentes) => {
   if (docentes.length === 0) return [];
 
-  const ordenadosPorPromedio = [...docentes].sort((a, b) => {
-    if (b.PROMEDIO_GENERAL !== a.PROMEDIO_GENERAL) {
-      return b.PROMEDIO_GENERAL - a.PROMEDIO_GENERAL;
+  const ordenadosPorPuntajeAjustado = [...docentes].sort((a, b) => {
+    if (Math.abs(b.PUNTAJE_AJUSTADO - a.PUNTAJE_AJUSTADO) > 0.001) {
+      return b.PUNTAJE_AJUSTADO - a.PUNTAJE_AJUSTADO;
     }
-    return a.ID_DOCENTE - b.ID_DOCENTE;
+    return b.FACTOR_CONFIANZA - a.FACTOR_CONFIANZA;
   });
   
-  const topMejores = ordenadosPorPromedio.slice(0, 3).map((docente, index) => ({
+  const topMejores = ordenadosPorPuntajeAjustado.slice(0, 3).map((docente, index) => ({
     ...docente,
     POSICION: `TOP ${index + 1} MEJOR`
   }));
 
   let topPeores = [];
-  if (ordenadosPorPromedio.length > 3) {
-    const docentesParaPeores = ordenadosPorPromedio.filter(docente => 
+  if (ordenadosPorPuntajeAjustado.length > 3) {
+    const docentesParaPeores = ordenadosPorPuntajeAjustado.filter(docente => 
       !topMejores.some(mejor => mejor.ID_DOCENTE === docente.ID_DOCENTE)
     );
     
@@ -412,6 +536,9 @@ const createPodium = (docentes) => {
 /**
  * Obtiene estadísticas del dashboard
  */
+/**
+ * Obtiene estadísticas del dashboard
+ */
 const getDashboardStats = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
   const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
   
@@ -427,7 +554,9 @@ const getDashboardStats = async ({ idConfiguracion, periodo, nombreSede, nomProg
       porcentaje_completado: 0,
       docentes_evaluados: 0,
       total_docentes: 0,
-      porcentaje_docentes_evaluados: 0
+      porcentaje_docentes_evaluados: 0,
+      estudiantes_completados: 0,
+      porcentaje_estudiantes_completados: 0
     };
   }
   
@@ -440,6 +569,39 @@ const getDashboardStats = async ({ idConfiguracion, periodo, nombreSede, nomProg
   // Calcular docentes evaluados
   const docentesEvaluados = calculateEvaluatedTeachers(docentes, estudianteAsignatura, evaluacionesCompletadas);
   
+  // Calcular estudiantes que han completado todas sus evaluaciones
+  let estudiantesCompletados = 0;
+  const estudiantesArray = Array.from(estudiantes);
+  
+  // Agrupar asignaturas por estudiante
+  const asignaturasPorEstudiante = academicData.reduce((acc, row) => {
+    if (!acc[row.ID_ESTUDIANTE]) {
+      acc[row.ID_ESTUDIANTE] = new Set();
+    }
+    acc[row.ID_ESTUDIANTE].add(row.COD_ASIGNATURA);
+    return acc;
+  }, {});
+  
+  // Contar evaluaciones completadas por estudiante
+  const evaluacionesCompletadasPorEstudiante = Array.from(evaluacionesCompletadas).reduce((acc, evalKey) => {
+    const [estudiante, asignatura] = evalKey.split('-');
+    if (!acc[estudiante]) {
+      acc[estudiante] = new Set();
+    }
+    acc[estudiante].add(asignatura);
+    return acc;
+  }, {});
+  
+  // Verificar qué estudiantes han completado todas sus evaluaciones
+  estudiantesArray.forEach(estudiante => {
+    const totalAsignaturas = asignaturasPorEstudiante[estudiante]?.size || 0;
+    const completadas = evaluacionesCompletadasPorEstudiante[estudiante]?.size || 0;
+    
+    if (totalAsignaturas > 0 && totalAsignaturas === completadas) {
+      estudiantesCompletados++;
+    }
+  });
+  
   // Calcular estadísticas finales
   const totalEstudiantes = estudiantes.size;
   const totalEvaluaciones = evaluaciones.size;
@@ -451,6 +613,8 @@ const getDashboardStats = async ({ idConfiguracion, periodo, nombreSede, nomProg
   const totalDocentesEvaluados = docentesEvaluados.size;
   const porcentajeDocentesEvaluados = calcularPorcentaje(totalDocentesEvaluados, totalDocentes);
   
+  const porcentajeEstudiantesCompletados = calcularPorcentaje(estudiantesCompletados, totalEstudiantes);
+  
   return {
     total_estudiantes: totalEstudiantes,
     total_evaluaciones: totalEvaluaciones,
@@ -459,7 +623,9 @@ const getDashboardStats = async ({ idConfiguracion, periodo, nombreSede, nomProg
     porcentaje_completado: porcentajeCompletado,
     docentes_evaluados: totalDocentesEvaluados,
     total_docentes: totalDocentes,
-    porcentaje_docentes_evaluados: porcentajeDocentesEvaluados
+    porcentaje_docentes_evaluados: porcentajeDocentesEvaluados,
+    estudiantes_completados: estudiantesCompletados,
+    porcentaje_estudiantes_completados: porcentajeEstudiantesCompletados
   };
 };
 
@@ -509,7 +675,7 @@ const getAspectosPromedio = async ({ idConfiguracion, periodo, nombreSede, nomPr
 };
 
 /**
- * Obtiene el ranking completo de docentes
+ * Obtiene el ranking completo de docentes CON AJUSTE BAYESIANO
  */
 const getRankingDocentes = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
   try {
@@ -537,6 +703,10 @@ const getRankingDocentes = async ({ idConfiguracion, periodo, nombreSede, nomPro
 
     console.log(`Combinaciones únicas estudiante-asignatura: ${estudiantesAsignaturasUnicos.length}`);
 
+    // NUEVO: Obtener estadísticas globales para ajuste bayesiano
+    const estadisticasGlobales = await getEstadisticasGlobales(idConfiguracion, estudiantesAsignaturasUnicos);
+    console.log('Estadísticas globales:', estadisticasGlobales);
+
     // Obtener evaluaciones con puntajes
     const evaluacionesData = await getEvaluationsWithScores(idConfiguracion, estudiantesAsignaturasUnicos);
     console.log(`Se encontraron ${evaluacionesData.length} respuestas de evaluación`);
@@ -548,21 +718,30 @@ const getRankingDocentes = async ({ idConfiguracion, periodo, nombreSede, nomPro
     // Procesar evaluaciones para docentes
     processEvaluationsForTeachers(docentesMap, evaluacionesData);
 
-    // Calcular métricas y crear ranking
-    const docentes = calculateTeacherMetrics(docentesMap);
-    const ranking = sortTeachersForRanking(docentes);
+    // MODIFICADO: Calcular métricas finales con ajuste bayesiano
+    const docentes = calculateTeacherMetrics(docentesMap, estadisticasGlobales);
+    console.log(`Docentes con métricas calculadas: ${docentes.length}`);
 
-    console.log(`Ranking final: ${ranking.length} docentes`);
-    return ranking;
+    // Ordenar docentes para ranking usando puntaje ajustado
+    const rankingOrdenado = sortTeachersForRanking(docentes);
+    
+    // Agregar posición al ranking
+    const rankingFinal = rankingOrdenado.map((docente, index) => ({
+      ...docente,
+      POSICION: index + 1
+    }));
+
+    console.log(`Ranking final generado con ${rankingFinal.length} docentes`);
+    return rankingFinal;
 
   } catch (error) {
-    console.error("Error al obtener el ranking de docentes: ", error);
+    console.error('Error en getRankingDocentes:', error);
     throw error;
   }
 };
 
 /**
- * Obtiene el podio de mejores y peores docentes
+ * Obtiene el podio de mejores y peores docentes CON AJUSTE BAYESIANO
  */
 const getPodioDocentes = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
   try {
@@ -579,7 +758,7 @@ const getPodioDocentes = async ({ idConfiguracion, periodo, nombreSede, nomProgr
       return [];
     }
 
-    console.log(`Se encontraron ${vistaData.length} registros para podio`);
+    console.log(`Procesando podio con ${vistaData.length} registros`);
 
     // Crear lista de estudiantes y asignaturas únicas
     const estudiantesAsignaturasUnicos = vistaData
@@ -588,30 +767,272 @@ const getPodioDocentes = async ({ idConfiguracion, periodo, nombreSede, nomProgr
         index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
       );
 
+    // Obtener estadísticas globales para ajuste bayesiano
+    const estadisticasGlobales = await getEstadisticasGlobales(idConfiguracion, estudiantesAsignaturasUnicos);
+    console.log('Estadísticas globales para podio:', estadisticasGlobales);
+
     // Obtener evaluaciones con puntajes
     const evaluacionesData = await getEvaluationsWithScores(idConfiguracion, estudiantesAsignaturasUnicos);
-    console.log(`Se encontraron ${evaluacionesData.length} respuestas de evaluación (Podio)`);
+    console.log(`Evaluaciones para podio: ${evaluacionesData.length}`);
 
     // Inicializar y procesar datos de docentes
     const docentesMap = initializeTeachersMap(vistaData);
     processEvaluationsForTeachers(docentesMap, evaluacionesData);
 
-    // Calcular métricas y crear podio
-    const docentes = calculateTeacherMetrics(docentesMap);
-    const podio = createPodium(docentes);
+    // Calcular métricas finales con ajuste bayesiano
+    const docentes = calculateTeacherMetrics(docentesMap, estadisticasGlobales);
+    console.log(`Docentes procesados para podio: ${docentes.length}`);
 
-    console.log(`Podio creado con ${podio.length} docentes`);
+    // Crear el podio
+    const podio = createPodium(docentes);
+    console.log(`Podio generado con ${podio.length} docentes`);
+
     return podio;
 
   } catch (error) {
-    console.error("Error al obtener el podio de docentes: ", error);
+    console.error('Error en getPodioDocentes:', error);
     throw error;
   }
 };
 
+/**
+ * Obtiene el detalle de un docente específico
+ */
+const getDetalleDocente = async ({ idConfiguracion, idDocente, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
+  try {
+    const pool = await getPool();
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
+    
+    // Obtener datos académicos del docente específico
+    const vistaData = await getAcademicData(filters, [
+      'ID_DOCENTE', 'DOCENTE', 'ID_ESTUDIANTE', 'COD_ASIGNATURA', 'ASIGNATURA',
+      'PERIODO', 'NOMBRE_SEDE', 'NOM_PROGRAMA', 'SEMESTRE', 'GRUPO'
+    ]);
+
+    // Filtrar por el docente específico
+    const docenteData = vistaData.filter(row => row.ID_DOCENTE == idDocente);
+    
+    if (docenteData.length === 0) {
+      return null;
+    }
+
+    // Crear lista de estudiantes y asignaturas únicas para este docente
+    const estudiantesAsignaturasUnicos = docenteData
+      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .filter((item, index, self) =>
+        index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
+      );
+
+    // Obtener estadísticas globales
+    const estadisticasGlobales = await getEstadisticasGlobales(idConfiguracion, estudiantesAsignaturasUnicos);
+
+    // Obtener evaluaciones del docente
+    const evaluacionesData = await getEvaluationsWithScores(idConfiguracion, estudiantesAsignaturasUnicos);
+
+    // Procesar datos del docente
+    const docentesMap = initializeTeachersMap(docenteData);
+    processEvaluationsForTeachers(docentesMap, evaluacionesData);
+
+    // Calcular métricas
+    const docentes = calculateTeacherMetrics(docentesMap, estadisticasGlobales);
+    
+    if (docentes.length === 0) {
+      return null;
+    }
+
+    const detalleDocente = docentes[0];
+
+    // Obtener detalle por aspectos
+    const { placeholders, params } = createInPlaceholders(estudiantesAsignaturasUnicos);
+    
+    const aspectosQuery = `
+      SELECT 
+        ae.ETIQUETA AS ASPECTO,
+        ROUND(AVG(cv.PUNTAJE), 2) AS PROMEDIO_ASPECTO,
+        COUNT(cv.PUNTAJE) AS TOTAL_RESPUESTAS_ASPECTO
+      FROM evaluaciones e
+      JOIN configuracion_aspecto ca 
+        ON e.ID_CONFIGURACION = ca.CONFIGURACION_EVALUACION_ID
+      JOIN aspectos_evaluacion ae 
+        ON ca.ASPECTO_ID = ae.ID
+      JOIN evaluacion_detalle ed 
+        ON e.ID = ed.EVALUACION_ID AND ed.ASPECTO_ID = ca.ID
+      JOIN configuracion_valoracion cv 
+        ON ed.VALORACION_ID = cv.VALORACION_ID
+      WHERE ca.ACTIVO = TRUE
+        AND cv.ACTIVO = TRUE
+        AND e.ID_CONFIGURACION = ?
+        AND e.DOCUMENTO_DOCENTE = ?
+        AND (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
+      GROUP BY ae.ID, ae.ETIQUETA 
+      ORDER BY ae.ID
+    `;
+
+    const [aspectos] = await pool.query(aspectosQuery, [idConfiguracion, idDocente, ...params]);
+
+    // Obtener lista de asignaturas del docente
+    const asignaturas = [...new Set(docenteData.map(row => ({
+      COD_ASIGNATURA: row.COD_ASIGNATURA,
+      ASIGNATURA: row.ASIGNATURA
+    })))];
+
+    return {
+      ...detalleDocente,
+      ASPECTOS: aspectos,
+      ASIGNATURAS: asignaturas
+    };
+
+  } catch (error) {
+    console.error('Error en getDetalleDocente:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene comentarios de evaluaciones para un docente específico
+ */
+const getComentariosDocente = async ({ idConfiguracion, idDocente, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
+  try {
+    const pool = await getPool();
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
+    
+    // Obtener datos académicos del docente
+    const vistaData = await getAcademicData(filters, ['ID_ESTUDIANTE', 'COD_ASIGNATURA']);
+    
+    if (vistaData.length === 0) {
+      return [];
+    }
+
+    const { placeholders, params } = createInPlaceholders(vistaData);
+
+    const comentariosQuery = `
+      SELECT 
+        e.COMENTARIO,
+        e.CODIGO_MATERIA,
+        e.FECHA_CREACION
+      FROM evaluaciones e
+      WHERE e.ID_CONFIGURACION = ?
+        AND e.DOCUMENTO_DOCENTE = ?
+        AND e.COMENTARIO IS NOT NULL 
+        AND TRIM(e.COMENTARIO) != ''
+        AND (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
+      ORDER BY e.FECHA_CREACION DESC
+    `;
+
+    const [comentarios] = await pool.query(comentariosQuery, [idConfiguracion, idDocente, ...params]);
+
+    return comentarios.map(comentario => ({
+      COMENTARIO: comentario.COMENTARIO,
+      MATERIA: comentario.CODIGO_MATERIA,
+      FECHA: comentario.FECHA_CREACION
+    }));
+
+  } catch (error) {
+    console.error('Error en getComentariosDocente:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene estadísticas comparativas del docente vs promedio general
+ */
+const getComparativaDocente = async ({ idConfiguracion, idDocente, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
+  try {
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
+    
+    // Obtener datos académicos generales
+    const vistaData = await getAcademicData(filters, [
+      'ID_DOCENTE', 'DOCENTE', 'ID_ESTUDIANTE', 'COD_ASIGNATURA'
+    ]);
+
+    if (vistaData.length === 0) {
+      return null;
+    }
+
+    // Datos del docente específico
+    const docenteData = vistaData.filter(row => row.ID_DOCENTE == idDocente);
+    
+    // Crear listas de estudiantes y asignaturas
+    const estudiantesAsignaturasGeneral = vistaData
+      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .filter((item, index, self) =>
+        index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
+      );
+
+    const estudiantesAsignaturasDocente = docenteData
+      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .filter((item, index, self) =>
+        index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
+      );
+
+    // Obtener estadísticas globales
+    const estadisticasGlobales = await getEstadisticasGlobales(idConfiguracion, estudiantesAsignaturasGeneral);
+
+    // Procesar datos generales
+    const evaluacionesDataGeneral = await getEvaluationsWithScores(idConfiguracion, estudiantesAsignaturasGeneral);
+    const docentesMapGeneral = initializeTeachersMap(vistaData);
+    processEvaluationsForTeachers(docentesMapGeneral, evaluacionesDataGeneral);
+    const docentesGeneral = calculateTeacherMetrics(docentesMapGeneral, estadisticasGlobales);
+
+    // Procesar datos del docente específico
+    const evaluacionesDataDocente = await getEvaluationsWithScores(idConfiguracion, estudiantesAsignaturasDocente);
+    const docentesMapDocente = initializeTeachersMap(docenteData);
+    processEvaluationsForTeachers(docentesMapDocente, evaluacionesDataDocente);
+    const docentesEspecifico = calculateTeacherMetrics(docentesMapDocente, estadisticasGlobales);
+
+    if (docentesEspecifico.length === 0) {
+      return null;
+    }
+
+    // Calcular promedios generales
+    const promedioGeneralSistema = calcularPromedio(docentesGeneral.map(d => d.PROMEDIO_GENERAL));
+    const puntajeAjustadoPromedio = calcularPromedio(docentesGeneral.map(d => d.PUNTAJE_AJUSTADO));
+    const factorConfianzaPromedio = calcularPromedio(docentesGeneral.map(d => d.FACTOR_CONFIANZA));
+
+    const docenteEspecifico = docentesEspecifico[0];
+
+    return {
+      DOCENTE: docenteEspecifico,
+      PROMEDIO_SISTEMA: {
+        PROMEDIO_GENERAL: promedioGeneralSistema,
+        PUNTAJE_AJUSTADO: puntajeAjustadoPromedio,
+        FACTOR_CONFIANZA: factorConfianzaPromedio
+      },
+      DIFERENCIAS: {
+        PROMEDIO_GENERAL: parseFloat((docenteEspecifico.PROMEDIO_GENERAL - promedioGeneralSistema).toFixed(4)),
+        PUNTAJE_AJUSTADO: parseFloat((docenteEspecifico.PUNTAJE_AJUSTADO - puntajeAjustadoPromedio).toFixed(4)),
+        FACTOR_CONFIANZA: parseFloat((docenteEspecifico.FACTOR_CONFIANZA - factorConfianzaPromedio).toFixed(3))
+      }
+    };
+
+  } catch (error) {
+    console.error('Error en getComparativaDocente:', error);
+    throw error;
+  }
+};
+
+// ======================================
+// EXPORTACIONES
+// ======================================
+
 module.exports = {
+  // Funciones principales
   getDashboardStats,
   getAspectosPromedio,
   getRankingDocentes,
-  getPodioDocentes
-};
+  getPodioDocentes,
+  getDetalleDocente,
+  getComentariosDocente,
+  getComparativaDocente,
+  
+  // Utilidades (por si se necesitan en otros módulos)
+  buildWhereClause,
+  getAcademicData,
+  calcularPromedio,
+  calcularPorcentaje,
+  aplicarAjusteBayesiano,
+  calcularFactorConfianza,
+  
+  // Configuración
+  RANKING_CONFIG
+};// MODIFICADO

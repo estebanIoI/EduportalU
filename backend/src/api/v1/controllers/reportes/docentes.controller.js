@@ -1,129 +1,187 @@
+const DocentesService = require("../../services/reportes/docentes.service");
 const {
-    getDocentesAsignaturasModel,
-    getEstudiantesEvaluadosModel,
-    getAspectosPuntajeModel,
-    getComentariosModel
-} = require('../../models/reportes/docentes.model');
+  successResponse,
+  successPaginatedResponse,
+  errorResponse,
+} = require("../../utils/responseHandler");
+const MESSAGES = require("../../../../constants/messages");
 
-const getDocentesAsignaturasController = async (req, res) => {
-    try {
-        const {
-            idConfiguracion,
-            periodo,
-            nombreSede,
-            nomPrograma,
-            semestre,
-            grupo
-        } = req.query;
+const getDocentesAsignaturasController = async (req, res, next) => {
+  try {
+    const {
+      idConfiguracion,
+      periodo,
+      nombreSede,
+      nomPrograma,
+      semestre,
+      grupo
+    } = req.query;
 
-        // Todos los filtros son opcionales
-        const docentes = await getDocentesAsignaturasModel({
-            idConfiguracion,
-            periodo,
-            nombreSede,
-            nomPrograma,
-            semestre,
-            grupo
-        });
+    const filters = {
+      idConfiguracion,
+      periodo,
+      nombreSede,
+      nomPrograma,
+      semestre,
+      grupo
+    };
 
-        res.json({
-            success: true,
-            data: docentes || [],
-        });
-    } catch (error) {
-        console.error('Error en getDocentesAsignaturasController:', error);
-        res.status(500).json({
-            success: false,
-            error: 'Error al obtener la lista de docentes y asignaturas',
-            detalle: error.message
-        });
-    }
+    const { pagination } = req;
+    
+    const docentes = await DocentesService.getDocentesAsignaturas(filters, pagination);
+
+    const paginatedResponse = res.paginate(docentes.data, docentes.totalCount);
+
+    return successPaginatedResponse(res, {
+      data: paginatedResponse.data,
+      pagination: paginatedResponse.pagination,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
+    });
+  } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
 };
 
-const getEstudiantesEvaluadosController = async (req, res) => {
-    try {
-        const { idDocente, codAsignatura, grupo } = req.params;
-        
-        if (!idDocente || !codAsignatura || !grupo) {
-            return res.status(400).json({ 
-                error: 'Faltan parámetros requeridos: idDocente, codAsignatura y grupo' 
-            });
-        }
+const getEstudiantesEvaluadosController = async (req, res, next) => {
+  try {
+    const { idDocente, codAsignatura, grupo } = req.params;
 
-        const estudiantes = await getEstudiantesEvaluadosModel(idDocente, codAsignatura, grupo);
-        if (!estudiantes) {
-            return res.status(404).json({ 
-                error: 'No se encontraron estudiantes evaluados para los parámetros proporcionados' 
-            });
-        }
-        
-        res.json(estudiantes);
-    } catch (error) {
-        console.error('Error en getEstudiantesEvaluadosController:', error);
-        res.status(500).json({ 
-            error: 'Error al obtener el listado de estudiantes evaluados',
-            detalle: error.message 
-        });
+    const estudiantes = await DocentesService.getEstudiantesEvaluados(
+      idDocente,
+      codAsignatura,
+      grupo
+    );
+
+    return successResponse(res, {
+      data: estudiantes,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
+    });
+  } catch (error) {
+    if (error.message.includes("parámetros requeridos") || 
+        error.message.includes("parámetro") && error.message.includes("requerido")) {
+      return errorResponse(res, {
+        message: error.message,
+        statusCode: 400
+      });
     }
+
+    if (error.message.includes("No se encontraron")) {
+      return errorResponse(res, {
+        message: error.message,
+        statusCode: 404
+      });
+    }
+
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
 };
 
-const getAspectosPuntajeController = async (req, res) => {
-    try {
-        const { idDocente } = req.params;
-        
-        if (!idDocente) {
-            return res.status(400).json({ 
-                error: 'El parámetro idDocente es requerido' 
-            });
-        }
+const getAspectosPuntajeController = async (req, res, next) => {
+  try {
+    const {
+      idDocente,
+      idConfiguracion,  
+      periodo,
+      nombreSede,
+      nomPrograma,
+      semestre,
+      grupo
+    } = req.query;
 
-        const aspectos = await getAspectosPuntajeModel(idDocente);
-        if (!aspectos || aspectos.length === 0) {
-            return res.status(404).json({ 
-                error: 'No se encontraron aspectos y puntajes para el docente especificado' 
-            });
-        }
-        
-        res.json(aspectos);
-    } catch (error) {
-        console.error('Error en getAspectosPuntajeController:', error);
-        res.status(500).json({ 
-            error: 'Error al obtener los aspectos y puntajes',
-            detalle: error.message 
-        });
+    // Validar parámetros requeridos
+    if (!idDocente) {
+      throw new Error("El parámetro 'idDocente' es requerido");
     }
+
+    if (!idConfiguracion) {
+      throw new Error("El parámetro 'idConfiguracion' es requerido");
+    }
+
+    // Construir objeto de filtros
+    const filters = {
+      idDocente,
+      idConfiguracion,
+      periodo,
+      nombreSede,
+      nomPrograma,
+      semestre,
+      grupo
+    };
+
+    // Obtener datos del servicio
+    const aspectos = await DocentesService.getAspectosPuntaje(filters);
+
+    // Manejar caso de no encontrados
+    if (!aspectos || aspectos.length === 0) {
+      return errorResponse(res, {
+        message: MESSAGES.DOCENTES.ASPECTOS_NO_ENCONTRADOS || "No se encontraron aspectos para los filtros especificados",
+        statusCode: 404
+      });
+    }
+
+    // Retornar respuesta exitosa
+    return successResponse(res, {
+      data: aspectos,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
+    });
+
+  } catch (error) {
+    // Manejo específico de errores
+    if (error.message.includes("parámetro") && error.message.includes("requerido")) {
+      return errorResponse(res, {
+        message: error.message,
+        statusCode: 400
+      });
+    }
+
+    if (error.message.includes("No se encontraron")) {
+      return errorResponse(res, {
+        message: error.message,
+        statusCode: 404
+      });
+    }
+
+    // Error genérico
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
 };
 
-const getComentariosController = async (req, res) => {
-    try {
-        const { idDocente } = req.params;
-        
-        if (!idDocente) {
-            return res.status(400).json({ 
-                error: 'El parámetro idDocente es requerido' 
-            });
-        }
+const getComentariosController = async (req, res, next) => {
+  try {
+    const { idDocente } = req.params;
 
-        const comentarios = await getComentariosModel(idDocente);
-        if (!comentarios || comentarios.length === 0) {
-            return res.status(404).json({ 
-                error: 'No se encontraron comentarios para el docente especificado' 
-            });
-        }
-        
-        res.json(comentarios);
-    } catch (error) {
-        console.error('Error en getComentariosController:', error);
-        res.status(500).json({ 
-            error: 'Error al obtener los comentarios',
-            detalle: error.message 
-        });
+    const comentarios = await DocentesService.getComentarios(idDocente);
+
+    return successResponse(res, {
+      data: comentarios,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
+    });
+  } catch (error) {
+    if (error.message.includes("parámetro") && error.message.includes("requerido")) {
+      return errorResponse(res, {
+        message: error.message,
+        statusCode: 400
+      });
     }
+
+    if (error.message.includes("No se encontraron")) {
+      return errorResponse(res, {
+        message: error.message,
+        statusCode: 404
+      });
+    }
+
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
 };
 
 module.exports = {
-    getDocentesAsignaturasController,
-    getEstudiantesEvaluadosController,
-    getAspectosPuntajeController,
-    getComentariosController
-}; 
+  getDocentesAsignaturasController,
+  getEstudiantesEvaluadosController,
+  getAspectosPuntajeController,
+  getComentariosController,
+};

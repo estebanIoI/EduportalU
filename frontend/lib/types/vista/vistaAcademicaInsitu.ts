@@ -29,3 +29,9 @@ export type SedesResponse = ApiResponse<Sede[]>;
 export type ProgramasResponse = ApiResponse<Programa[]>;
 export type SemestresResponse = ApiResponse<Semestre[]>;
 export type GruposResponse = ApiResponse<Grupo[]>;
+
+
+export interface OpcionFiltro {
+  value: string
+  label: string
+}

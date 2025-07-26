@@ -2,10 +2,15 @@
 const EvaluacionDetalleModel = require('../../models/evaluacion/evaluacionDetalle.model');
 const EvaluacionesModel = require('../../models/evaluacion/evaluaciones.model');
 
-const getAllDetalles = async () => {
+const getAllDetalles = async (pagination) => {
   try {
-    const detalles = await EvaluacionDetalleModel.getAllDetalles();
-    return detalles;
+    const detalles = await EvaluacionDetalleModel.getAllDetalles(pagination);
+    const totalCount = await EvaluacionDetalleModel.getCount();
+
+    return {
+      data: detalles,
+      totalCount
+    };
   } catch (error) {
     throw error;
   }

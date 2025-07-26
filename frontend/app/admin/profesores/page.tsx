@@ -5,12 +5,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Input } from "@/components/ui/input"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import { Search, ChevronDown, ChevronRight, MessageSquare, Check, X, BookOpen, Download } from "lucide-react"
+import { Search, ChevronDown, ChevronRight, MessageSquare, BookOpen, Download } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { useFormContext } from "@/lib/form-context"
 import { profesoresService } from "@/services"
+import { Pagination } from "@/app/admin/components/pagination"
 import { AsignaturaDocente, AspectoPuntaje, ProfesoresParams } from "@/lib/types/profesores"
 import Filtros from "@/app/admin/components/filters"
 import apiClient from "@/lib/api"
@@ -22,6 +21,16 @@ interface FiltrosState {
   programaSeleccionado: string
   semestreSeleccionado: string
   grupoSeleccionado: string
+}
+
+interface FiltersAspectosPuntaje {
+  idDocente?: string;
+  idConfiguracion?: number;
+  periodo?: string;
+  nombreSede?: string;
+  nomPrograma?: string;
+  semestre?: string;
+  grupo?: string;
 }
 
 export default function ProfesoresPage() {
@@ -40,17 +49,32 @@ export default function ProfesoresPage() {
   const [selectedTeacher, setSelectedTeacher] = useState<string | null>(null)
   const [showEvaluations, setShowEvaluations] = useState<string | null>(null)
   const [selectedAspect, setSelectedAspect] = useState<{ teacherId: string; aspectId: string } | null>(null)
-  const [selectedCourse, setSelectedCourse] = useState<{ teacherId: string; courseId: number } | null>(null)
-  const [asignaturas, setAsignaturas] = useState<AsignaturaDocente[]>([])
+  const [selectedCourse, setSelectedCourse] = useState<{ teacherId: string; courseId: string } | null>(null)
+  const [docentes, setDocentes] = useState<AsignaturaDocente[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingInforme, setLoadingInforme] = useState(false)
   const [aspectosEvaluados, setAspectosEvaluados] = useState<Record<string, AspectoPuntaje[]>>({})
   const [loadingAspectos, setLoadingAspectos] = useState<Record<string, boolean>>({})
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+    hasNextPage: false,
+    hasPrevPage: false,
+    nextPage: null,
+    prevPage: null
+  })
 
   const { activeAspectIds } = useFormContext()
 
   const convertirFiltrosAParams = useCallback((filtros: FiltrosState): ProfesoresParams => {
-    const params: ProfesoresParams = {}
+    const params: ProfesoresParams = {
+      page: pagination.currentPage,
+      limit: pagination.itemsPerPage
+    }
     
     if (filtros.configuracionSeleccionada) {
       params.idConfiguracion = filtros.configuracionSeleccionada
@@ -72,14 +96,27 @@ export default function ProfesoresPage() {
     }
     
     return params
-  }, [])
+  }, [pagination.currentPage, pagination.itemsPerPage])
 
   const cargarDatos = useCallback(async (filtrosActuales: FiltrosState) => {
     setLoading(true)
     try {
       const params = convertirFiltrosAParams(filtrosActuales)
-      const data = await profesoresService.getAsignaturas(params)
-      setAsignaturas(data.data)
+      const response = await profesoresService.getAsignaturas(params)
+      
+      setDocentes(response.data)
+      
+      // Update pagination from response
+      setPagination({
+        currentPage: response.pagination.currentPage,
+        totalPages: response.pagination.totalPages,
+        totalItems: response.pagination.totalItems,
+        itemsPerPage: response.pagination.itemsPerPage,
+        hasNextPage: response.pagination.hasNextPage,
+        hasPrevPage: response.pagination.hasPrevPage,
+        nextPage: response.pagination.nextPage,
+        prevPage: response.pagination.prevPage
+      })
       
       setSelectedTeacher(null)
       setShowEvaluations(null)
@@ -99,10 +136,18 @@ export default function ProfesoresPage() {
     }
   }, [convertirFiltrosAParams, toast])
 
+  const handlePageChange = useCallback((page: number) => {
+    setPagination(prev => ({ ...prev, currentPage: page }))
+  }, [])
+
+  useEffect(() => {
+    cargarDatos(filtros)
+  }, [filtros, pagination.currentPage, cargarDatos])
+
   const handleFiltrosChange = useCallback((nuevosFiltros: FiltrosState) => {
+    setPagination(prev => ({ ...prev, currentPage: 1 }))
     setFiltros(nuevosFiltros)
-    cargarDatos(nuevosFiltros)
-  }, [cargarDatos])
+  }, [])
 
   const limpiarFiltros = useCallback(() => {
     const filtrosLimpiados = {
@@ -114,73 +159,111 @@ export default function ProfesoresPage() {
       grupoSeleccionado: ""
     }
     setFiltros(filtrosLimpiados)
-    cargarDatos(filtrosLimpiados)
-  }, [filtros.configuracionSeleccionada, cargarDatos])
+    setPagination(prev => ({ ...prev, currentPage: 1 }))
+  }, [filtros.configuracionSeleccionada])
 
-  const asignaturasPorDocente = useMemo(() => {
-    const agrupadas: Record<string, Record<string, AsignaturaDocente[]>> = {}
+  const asignaturasPorSemestre = useCallback((docente: AsignaturaDocente) => {
+    const agrupadas: Record<string, typeof docente.asignaturas> = {}
     
-    asignaturas.forEach(asig => {
-      if (!agrupadas[asig.ID_DOCENTE]) {
-        agrupadas[asig.ID_DOCENTE] = {}
+    docente.asignaturas.forEach(asig => {
+      if (!agrupadas[asig.SEMESTRE_PREDOMINANTE]) {
+        agrupadas[asig.SEMESTRE_PREDOMINANTE] = []
       }
-      if (!agrupadas[asig.ID_DOCENTE][asig.SEMESTRE_PREDOMINANTE]) {
-        agrupadas[asig.ID_DOCENTE][asig.SEMESTRE_PREDOMINANTE] = []
-      }
-      agrupadas[asig.ID_DOCENTE][asig.SEMESTRE_PREDOMINANTE].push(asig)
+      agrupadas[asig.SEMESTRE_PREDOMINANTE].push(asig)
     })
 
     return agrupadas
-  }, [asignaturas])
-
-  const docentes = useMemo(() => {
-    const docentesSet = new Set(asignaturas.map(asig => asig.ID_DOCENTE))
-    return Array.from(docentesSet).map(id => {
-      const docente = asignaturas.find(asig => asig.ID_DOCENTE === id)
-      return {
-        ID_DOCENTE: id,
-        DOCENTE: docente?.DOCENTE || '',
-        PROGRAMA_PREDOMINANTE: docente?.PROGRAMA_PREDOMINANTE || ''
-      }
-    })
-  }, [asignaturas])
+  }, [])
 
   const filteredTeachers = useMemo(() => {
     let result = docentes
 
     if (searchTerm) {
       result = result.filter(
-        (teacher) =>
-          teacher.DOCENTE.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          teacher.PROGRAMA_PREDOMINANTE.toLowerCase().includes(searchTerm.toLowerCase()),
+        (teacher) => {
+          const matchesName = teacher.DOCENTE.toLowerCase().includes(searchTerm.toLowerCase())
+          const matchesProgram = teacher.asignaturas.some(asig => 
+            asig.PROGRAMA_PREDOMINANTE.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+          return matchesName || matchesProgram
+        }
       )
     }
 
     return result
   }, [docentes, searchTerm])
 
-  useEffect(() => {
-    cargarDatos(filtros)
-  }, [])
+  const estadisticas = useMemo(() => {
+    const programas = new Set<string>()
+    let totalAsignaturas = 0
+    let totalGrupos = 0
 
-  const cargarAspectosEvaluados = useCallback(async (idDocente: string) => {
-    if (aspectosEvaluados[idDocente]) return
-
-    setLoadingAspectos(prev => ({ ...prev, [idDocente]: true }))
-    try {
-      const aspectos = await profesoresService.getAspectosPuntaje(idDocente)
-      setAspectosEvaluados(prev => ({ ...prev, [idDocente]: aspectos.data }))
-    } catch (error) {
-      console.error('Error al cargar aspectos:', error)
-      toast({
-        title: "Error",
-        description: "No se pudieron cargar los aspectos evaluados",
-        variant: "destructive",
+    docentes.forEach(docente => {
+      docente.asignaturas.forEach(asig => {
+        programas.add(asig.PROGRAMA_PREDOMINANTE)
+        totalGrupos += asig.grupos.length
       })
-    } finally {
-      setLoadingAspectos(prev => ({ ...prev, [idDocente]: false }))
+      totalAsignaturas += docente.asignaturas.length
+    })
+
+    return {
+      totalProfesores: docentes.length,
+      totalProgramas: programas.size,
+      totalAsignaturas,
+      totalGrupos
     }
-  }, [aspectosEvaluados, toast])
+  }, [docentes])
+
+// En la función cargarAspectosEvaluados
+const cargarAspectosEvaluados = useCallback(async (idDocente: string) => {
+  // Verificar si ya tenemos los datos para este docente
+  if (aspectosEvaluados[idDocente]) return;
+
+  setLoadingAspectos(prev => ({ ...prev, [idDocente]: true }));
+  
+  try {
+    // Validar que tenemos los filtros necesarios
+    if (!filtros.configuracionSeleccionada) {
+      throw new Error("Se requiere seleccionar una configuración antes de cargar los aspectos evaluados");
+    }
+
+    // Preparar los parámetros para la consulta
+    const params: FiltersAspectosPuntaje = {
+      idDocente,
+      idConfiguracion: filtros.configuracionSeleccionada,
+      ...(filtros.periodoSeleccionado && { periodo: filtros.periodoSeleccionado }),
+      ...(filtros.sedeSeleccionada && { nombreSede: filtros.sedeSeleccionada }),
+      ...(filtros.programaSeleccionado && { nomPrograma: filtros.programaSeleccionado }),
+      ...(filtros.semestreSeleccionado && { semestre: filtros.semestreSeleccionado }),
+      ...(filtros.grupoSeleccionado && { grupo: filtros.grupoSeleccionado }),
+    };
+
+    console.log('Parámetros para cargar aspectos:', params);
+
+    const response = await profesoresService.getAspectosPuntaje(params);
+
+    setAspectosEvaluados(prev => ({ 
+      ...prev, 
+      [idDocente]: response.data 
+    }));
+
+  } catch (error) {
+    console.error('Error al cargar aspectos:', error);
+    
+    let errorMessage = "No se pudieron cargar los aspectos evaluados";
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    }
+    
+    toast({
+      title: "Error",
+      description: errorMessage,
+      variant: "destructive",
+    });
+  } finally {
+    setLoadingAspectos(prev => ({ ...prev, [idDocente]: false }));
+  }
+}, [aspectosEvaluados, toast, filtros]);
 
   const handleSelectTeacher = useCallback((id: string) => {
     setSelectedTeacher((prevId) => (prevId === id ? null : id))
@@ -208,10 +291,10 @@ export default function ProfesoresPage() {
     )
   }, [])
 
-  const toggleCourse = useCallback((teacherId: string, courseId: number, e: React.MouseEvent) => {
+  const toggleCourse = useCallback((teacherId: string, courseKey: string, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedCourse((prev) =>
-      prev?.teacherId === teacherId && prev?.courseId === courseId ? null : { teacherId, courseId },
+      prev?.teacherId === teacherId && prev?.courseId === courseKey ? null : { teacherId, courseId: courseKey },
     )
   }, [])
 
@@ -237,11 +320,9 @@ export default function ProfesoresPage() {
            filtros.grupoSeleccionado
   }, [filtros])
 
-  // Función actualizada para generar el texto del informe incluyendo configuración y período
   const getTextoInforme = useCallback(() => {
     const partes = []
     
-    // Agregar configuración y período si están disponibles
     if (filtros.configuracionSeleccionada) {
       partes.push(`Config. ${filtros.configuracionSeleccionada}`)
     }
@@ -261,97 +342,87 @@ export default function ProfesoresPage() {
     return partes.length > 0 ? partes.join(' - ') : "Informe General"
   }, [filtros])
 
-  // Condición para habilitar el botón: solo requiere sede seleccionada
   const puedeDescargarInforme = useMemo(() => {
     return !!filtros.sedeSeleccionada && !loadingInforme
   }, [filtros.sedeSeleccionada, loadingInforme])
 
- const handleDescargarInforme = useCallback(async () => {
-  if (!puedeDescargarInforme) {
-    toast({
-      title: "Seleccione una sede",
-      description: "Por favor seleccione una sede para generar el informe",
-      variant: "destructive",
-    });
-    return;
-  }
+  const handleDescargarInforme = useCallback(async () => {
+    if (!puedeDescargarInforme) {
+      toast({
+        title: "Seleccione una sede",
+        description: "Por favor seleccione una sede para generar el informe",
+        variant: "destructive",
+      });
+      return;
+    }
 
-  setLoadingInforme(true);
-  const tipoInforme = getTextoInforme();
+    setLoadingInforme(true);
+    const tipoInforme = getTextoInforme();
 
-  try {
-    toast({
-      title: "Generando informe",
-      description: `Preparando informe para ${tipoInforme}`,
-      variant: "default",
-    });
+    try {
+      toast({
+        title: "Generando informe",
+        description: `Preparando informe para ${tipoInforme}`,
+        variant: "default",
+      });
 
-    // Preparar los parámetros para el endpoint
-    const params = {
-      idConfiguracion: filtros.configuracionSeleccionada?.toString(),
-      periodo: filtros.periodoSeleccionado,
-      nombreSede: filtros.sedeSeleccionada,
-      nomPrograma: filtros.programaSeleccionado,
-      semestre: filtros.semestreSeleccionado,
-      grupo: filtros.grupoSeleccionado,
-    };
+      const params = {
+        idConfiguracion: filtros.configuracionSeleccionada?.toString(),
+        periodo: filtros.periodoSeleccionado,
+        nombreSede: filtros.sedeSeleccionada,
+        nomPrograma: filtros.programaSeleccionado,
+        semestre: filtros.semestreSeleccionado,
+        grupo: filtros.grupoSeleccionado,
+      };
 
-    // Filtrar parámetros no definidos
-    const filteredParams = Object.fromEntries(
-      Object.entries(params).filter(([_, value]) => value !== undefined && value !== null)
-    );
+      const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([_, value]) => value !== undefined && value !== null)
+      );
 
-    // Llamar al endpoint usando axios con responseType 'blob'
-    const response = await apiClient.downloadFile('/informe-docentes', {
-      params: filteredParams,
-      responseType: 'blob', // Importante para manejar la descarga de archivos
-    });
+      const response = await apiClient.downloadFile('/informe-docentes', {
+        params: filteredParams,
+        responseType: 'blob',
+      });
 
-    // Obtener el blob del archivo
-    const blob = new Blob([response.data], {
-      type: response.headers['content-type'],
-    });
+      const blob = new Blob([response.data], {
+        type: response.headers['content-type'],
+      });
 
-    // Crear URL temporal para la descarga
-    const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(blob);
 
-    // Crear elemento de descarga
-    const link = document.createElement('a');
-    link.href = url;
+      const link = document.createElement('a');
+      link.href = url;
 
-    // Generar nombre del archivo basado en los filtros
-    const nombreArchivo = `Informe_Docentes_${
-      filtros.sedeSeleccionada?.replace(/\s+/g, '_') || 'reporte'
-    }_${new Date().toISOString().split('T')[0]}.docx`;
-    link.download = nombreArchivo;
+      const nombreArchivo = `Informe_Docentes_${
+        filtros.sedeSeleccionada?.replace(/\s+/g, '_') || 'reporte'
+      }_${new Date().toISOString().split('T')[0]}.docx`;
+      link.download = nombreArchivo;
 
-    // Ejecutar descarga
-    document.body.appendChild(link);
-    link.click();
+      document.body.appendChild(link);
+      link.click();
 
-    // Limpiar
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
-    toast({
-      title: "Informe descargado",
-      description: `El informe "${nombreArchivo}" se ha descargado correctamente`,
-      variant: "default",
-    });
+      toast({
+        title: "Informe descargado",
+        description: `El informe "${nombreArchivo}" se ha descargado correctamente`,
+        variant: "default",
+      });
 
-  } catch (error) {
-    console.error('Error al descargar informe:', error);
-    let errorMessage = "Ocurrió un error al descargar el informe. Por favor, inténtelo de nuevo más tarde.";
+    } catch (error) {
+      console.error('Error al descargar informe:', error);
+      let errorMessage = "Ocurrió un error al descargar el informe. Por favor, inténtelo de nuevo más tarde.";
 
-    toast({
-      title: "Error al descargar",
-      description: errorMessage,
-      variant: "destructive",
-    });
-  } finally {
-    setLoadingInforme(false);
-  }
-}, [filtros, puedeDescargarInforme, toast, getTextoInforme]);
+      toast({
+        title: "Error al descargar",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingInforme(false);
+    }
+  }, [filtros, puedeDescargarInforme, toast, getTextoInforme]);
 
   if (loading) {
     return (
@@ -394,7 +465,6 @@ export default function ProfesoresPage() {
                 </CardDescription>
               </div>
               
-              {/* Botón de descarga con funcionalidad completa */}
               <div className="flex flex-col items-end gap-2">
                 <Button 
                   variant="outline" 
@@ -439,36 +509,39 @@ export default function ProfesoresPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
               <div className="bg-blue-50 p-4 rounded-lg">
                 <h3 className="text-sm font-medium text-blue-900">Total Profesores</h3>
-                <p className="text-2xl font-bold text-blue-700">{filteredTeachers.length}</p>
+                <p className="text-2xl font-bold text-blue-700">{estadisticas.totalProfesores}</p>
               </div>
               <div className="bg-green-50 p-4 rounded-lg">
                 <h3 className="text-sm font-medium text-green-900">Programas</h3>
-                <p className="text-2xl font-bold text-green-700">
-                  {new Set(filteredTeachers.map(t => t.PROGRAMA_PREDOMINANTE)).size}
-                </p>
+                <p className="text-2xl font-bold text-green-700">{estadisticas.totalProgramas}</p>
               </div>
               <div className="bg-purple-50 p-4 rounded-lg">
                 <h3 className="text-sm font-medium text-purple-900">Asignaturas</h3>
-                <p className="text-2xl font-bold text-purple-700">{asignaturas.length}</p>
+                <p className="text-2xl font-bold text-purple-700">{estadisticas.totalAsignaturas}</p>
+              </div>
+              <div className="bg-orange-50 p-4 rounded-lg">
+                <h3 className="text-sm font-medium text-orange-900">Grupos</h3>
+                <p className="text-2xl font-bold text-orange-700">{estadisticas.totalGrupos}</p>
               </div>
             </div>
 
             <div className="space-y-4">
               {filteredTeachers.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  {asignaturas.length === 0 && hayFiltrosAplicados ? 
+                  {docentes.length === 0 && hayFiltrosAplicados ? 
                     "No se encontraron profesores con los filtros aplicados." :
                     "No se encontraron profesores con los criterios de búsqueda."
                   }
                 </div>
               ) : (
                 filteredTeachers.map((teacher) => {
-                  const asignaturasDocente = asignaturasPorDocente[teacher.ID_DOCENTE] || {}
                   const isSelected = selectedTeacher === teacher.ID_DOCENTE
                   const showEvals = showEvaluations === teacher.ID_DOCENTE
+                  const asignaturasAgrupadas = asignaturasPorSemestre(teacher)
+                  const programaPrincipal = teacher.asignaturas[0]?.PROGRAMA_PREDOMINANTE || ""
 
                   return (
                     <div
@@ -492,63 +565,130 @@ export default function ProfesoresPage() {
                             )}
                             <div>
                               <h3 className="font-medium">{teacher.DOCENTE}</h3>
-                              <p className="text-sm text-gray-500">{teacher.PROGRAMA_PREDOMINANTE}</p>
+                              <p className="text-sm text-gray-500">{programaPrincipal}</p>
                             </div>
                           </div>
+                          <div className="flex items-center gap-4">
+                            <div className="text-right">
+                              <div className={`text-lg font-semibold ${getScoreTextColor(teacher.porcentaje_completado)}`}>
+                                {teacher.porcentaje_completado}%
+                              </div>
+                              <div className="text-xs text-gray-500">
+                                {teacher.evaluaciones_completadas}/{teacher.total_evaluaciones_esperadas} evaluaciones
+                              </div>
+                            </div>
+                            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              teacher.estado_evaluacion === 'COMPLETADO' 
+                                ? 'bg-green-100 text-green-800' 
+                                : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {teacher.estado_evaluacion}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <Progress
+                            value={teacher.porcentaje_completado}
+                            className="h-2"
+                            indicatorClassName={getScoreColor(teacher.porcentaje_completado)}
+                          />
                         </div>
                       </div>
 
                       {isSelected && (
                         <div className="bg-gray-50 border-t p-4">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                             <div>
-                              <p className="text-sm text-gray-500">Programa</p>
-                              <p>{teacher.PROGRAMA_PREDOMINANTE}</p>
+                              <p className="text-sm text-gray-500">Total Evaluaciones Esperadas</p>
+                              <p className="font-medium">{teacher.total_evaluaciones_esperadas}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Evaluaciones Completadas</p>
+                              <p className="font-medium">{teacher.evaluaciones_completadas}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-gray-500">Evaluaciones Pendientes</p>
+                              <p className="font-medium">{teacher.evaluaciones_pendientes}</p>
                             </div>
                           </div>
 
                           <div className="mb-4">
-                            <h4 className="font-medium mb-2">Asignaturas</h4>
+                            <h4 className="font-medium mb-2">Asignaturas ({teacher.asignaturas.length})</h4>
                             <div className="space-y-4">
-                              {Object.entries(asignaturasDocente).map(([semestre, asignaturas]) => (
+                              {Object.entries(asignaturasAgrupadas).map(([semestre, asignaturas]) => (
                                 <div key={semestre} className="border rounded-lg overflow-hidden">
                                   <div className="p-3 bg-gray-100">
                                     <h5 className="font-medium">{semestre}</h5>
                                   </div>
                                   <div className="divide-y">
                                     {asignaturas.map((asig) => {
-                                      const porcentaje = parseFloat(asig.porcentaje_completado)
+                                      const courseKey = `${asig.COD_ASIGNATURA}-${asig.ASIGNATURA}`
                                       const isSelected = selectedCourse?.teacherId === teacher.ID_DOCENTE && 
-                                                       selectedCourse?.courseId === asig.COD_ASIGNATURA
+                                                       selectedCourse?.courseId === courseKey
 
                                       return (
                                         <div
-                                          key={asig.COD_ASIGNATURA}
+                                          key={courseKey}
                                           className={`p-3 cursor-pointer hover:bg-gray-50 ${
                                             isSelected ? "bg-blue-50" : ""
                                           }`}
-                                          onClick={(e) => toggleCourse(teacher.ID_DOCENTE, asig.COD_ASIGNATURA, e)}
+                                          onClick={(e) => toggleCourse(teacher.ID_DOCENTE, courseKey, e)}
                                         >
                                           <div className="flex justify-between items-center">
                                             <div className="flex items-center">
                                               <BookOpen className="h-4 w-4 mr-2 text-gray-500" />
-                                              <span>{asig.ASIGNATURA}</span>
+                                              <div>
+                                                <span className="font-medium">{asig.ASIGNATURA}</span>
+                                                <div className="text-sm text-gray-500">
+                                                  {asig.PROGRAMA_PREDOMINANTE} - {asig.NOMBRE_SEDE}
+                                                </div>
+                                              </div>
                                             </div>
-                                            <div className={`text-sm font-medium ${getScoreTextColor(porcentaje)}`}>
-                                              {porcentaje}%
+                                            <div className={`text-sm font-medium ${getScoreTextColor(asig.porcentaje_completado)}`}>
+                                              {asig.porcentaje_completado}%
                                             </div>
                                           </div>
                                           <div className="mt-2">
                                             <Progress
-                                              value={porcentaje}
+                                              value={asig.porcentaje_completado}
                                               className="h-1.5"
-                                              indicatorClassName={getScoreColor(porcentaje)}
+                                              indicatorClassName={getScoreColor(asig.porcentaje_completado)}
                                             />
                                           </div>
+                                          
+                                          {/* Grupos de la asignatura */}
                                           {isSelected && (
-                                            <div className="mt-2 text-sm text-gray-600">
-                                              <p>Evaluaciones completadas: {asig.evaluaciones_completadas} de {asig.total_evaluaciones_esperadas}</p>
-                                              <p>Estado: {asig.estado_evaluacion}</p>
+                                            <div className="mt-4">
+                                              <h6 className="text-sm font-medium mb-2">Grupos ({asig.grupos.length})</h6>
+                                              <div className="space-y-2">
+                                                {asig.grupos.map(grupo => (
+                                                  <div key={`${asig.COD_ASIGNATURA}-${grupo.GRUPO}`} className="p-2 bg-white rounded border text-sm">
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                      <div>
+                                                        <p className="text-gray-500">Grupo:</p>
+                                                        <p className="font-medium">{grupo.GRUPO}</p>
+                                                      </div>
+                                                      <div>
+                                                        <p className="text-gray-500">Evaluaciones:</p>
+                                                        <p className="font-medium">{grupo.evaluaciones_completadas}/{grupo.total_evaluaciones_esperadas}</p>
+                                                      </div>
+                                                      <div>
+                                                        <p className="text-gray-500">Progreso:</p>
+                                                        <div className="flex items-center gap-2">
+                                                          <Progress
+                                                            value={grupo.porcentaje_completado}
+                                                            className="h-2 w-full"
+                                                            indicatorClassName={getScoreColor(grupo.porcentaje_completado)}
+                                                          />
+                                                          <span className={`text-xs font-medium ${getScoreTextColor(grupo.porcentaje_completado)}`}>
+                                                            {grupo.porcentaje_completado}%
+                                                          </span>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
                                             </div>
                                           )}
                                         </div>
@@ -577,7 +717,7 @@ export default function ProfesoresPage() {
                               <div className="flex justify-between items-center mb-3">
                                 <h4 className="font-medium">Aspectos Evaluados</h4>
                                 <div className="text-sm text-gray-500">
-                                  Total de estudiantes: {asignaturasPorDocente[teacher.ID_DOCENTE]?.[Object.keys(asignaturasPorDocente[teacher.ID_DOCENTE] || {})[0]]?.[0]?.total_evaluaciones_esperadas || 0}
+                                  Total de estudiantes: {teacher.total_evaluaciones_esperadas}
                                 </div>
                               </div>
                               <div className="space-y-4">
@@ -651,6 +791,19 @@ export default function ProfesoresPage() {
                   )
                 })
               )}
+            </div>
+
+            {/* Pagination */}
+            <div className="mt-6">
+              <Pagination
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                hasNextPage={pagination.hasNextPage}
+                hasPrevPage={pagination.hasPrevPage}
+                nextPage={pagination.nextPage}
+                prevPage={pagination.prevPage}
+                onPageChange={handlePageChange}
+              />
             </div>
           </CardContent>
         </Card>

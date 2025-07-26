@@ -9,10 +9,11 @@ const {
   updateEstadoConfiguracion
 } = require('../../controllers/evaluacion/configuracionValoracion.controller');
 
+const pagination = require('../../middlewares/pagination');
 const router = express.Router();
 
 router.patch('/:id/estado', updateEstadoConfiguracion);
-router.get('/', getConfiguraciones);
+router.get('/', pagination({ defaultLimit: 10, maxLimit: 50 }), getConfiguraciones);
 router.post('/', createConfiguracion);
 router.get('/:id', getConfiguracionById);
 router.put('/:id', updateConfiguracion);

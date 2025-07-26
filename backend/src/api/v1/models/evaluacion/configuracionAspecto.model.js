@@ -2,14 +2,56 @@
 const { getPool } = require('../../../../db');
 
 const ConfiguracionAspecto = {
-  getAllConfiguracionesAspecto: async () => {
+  getAllConfiguracionesAspecto: async (pagination) => {
     try {
       const pool = getPool();
-      const [rows] = await pool.query(
-        'SELECT ID, CONFIGURACION_EVALUACION_ID, ASPECTO_ID, ORDEN, ACTIVO FROM CONFIGURACION_ASPECTO'
-      );
+      let query = `
+        SELECT 
+          ca.ID, 
+          ca.CONFIGURACION_EVALUACION_ID, 
+          ca.ASPECTO_ID,
+          ae.ETIQUETA, 
+          ae.DESCRIPCION, 
+          ca.ORDEN, 
+          ca.ACTIVO 
+        FROM CONFIGURACION_ASPECTO ca 
+        INNER JOIN ASPECTOS_EVALUACION ae 
+          ON ca.ASPECTO_ID = ae.ID
+      `;
+      let params = [];
+
+      if (pagination) {
+        const limit = parseInt(pagination.limit);
+        const offset = parseInt(pagination.offset);
+
+        if (isNaN(limit) || isNaN(offset) || limit < 1 || offset < 0) {
+          throw new Error('Parámetros de paginación inválidos');
+        }
+
+        query += ' ORDER BY ca.ID LIMIT ? OFFSET ?';
+        params = [limit, offset];
+      } else {
+        query += ' ORDER BY ca.ID';
+      }
+
+      console.log('Query ejecutada:', query);
+      console.log('Parámetros:', params);
+
+      const [rows] = await pool.query(query, params);
       return rows;
     } catch (error) {
+      console.error('Error en getAllConfiguracionesAspecto:', error);
+      throw error;
+    }
+  },
+
+  getCount: async () => {
+    try {
+      const pool = getPool();
+      const [rows] = await pool.query('SELECT COUNT(*) as total FROM CONFIGURACION_ASPECTO');
+      return rows[0].total;
+    } catch (error) {
+      console.error('Error en getAspectosCount:', error);
       throw error;
     }
   },
@@ -18,11 +60,23 @@ const ConfiguracionAspecto = {
     try {
       const pool = getPool();
       const [rows] = await pool.query(
-        'SELECT ID, CONFIGURACION_EVALUACION_ID, ASPECTO_ID, ORDEN, ACTIVO FROM CONFIGURACION_ASPECTO WHERE ID = ?',
+        `SELECT 
+          ca.ID, 
+          ca.CONFIGURACION_EVALUACION_ID, 
+          ca.ASPECTO_ID,
+          ae.ETIQUETA, 
+          ae.DESCRIPCION, 
+          ca.ORDEN, 
+          ca.ACTIVO 
+        FROM CONFIGURACION_ASPECTO ca 
+        INNER JOIN ASPECTOS_EVALUACION ae 
+          ON ca.ASPECTO_ID = ae.ID 
+        WHERE ca.ID = ?`,
         [id]
       );
-      return rows[0];
+      return rows[0]; // Si no se encuentra, devuelve null explícitamente
     } catch (error) {
+      console.error('Error en getConfiguracionAspectoById:', error);
       throw error;
     }
   },

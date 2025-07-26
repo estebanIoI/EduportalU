@@ -69,26 +69,24 @@ export default function LoginPage() {
 
         // Determinar ruta de redirección
         let redirectPath = ""
-        if (allRoles.includes("admin") || allRoles.includes("director de programa")) {
+
+        if (allRoles.includes("admin")) {
           redirectPath = "/admin/dashboard"
+        } else if (allRoles.includes("director programa")) {
+          // Asegura que si tiene rol de director programa, va al dashboard de docente
+          redirectPath = "/docente/dashboard"
+        } else if (allRoles.includes("docente")) {
+          redirectPath = "/docente/dashboard"
+        } else if (allRoles.includes("estudiante")) {
+          redirectPath = "/estudiante/bienvenida"
         } else {
-          const userRole = userData.primaryRole.toLowerCase()
-          switch (userRole) {
-            case "estudiante":
-              redirectPath = "/estudiante/bienvenida"
-              break
-            case "docente":
-              redirectPath = "/docente/dashboard"
-              break
-            default:
-              toast({
-                title: "Error",
-                description: "Rol de usuario no reconocido",
-                variant: "destructive",
-              })
-              setLoginStage('idle')
-              return
-          }
+          toast({
+            title: "Error",
+            description: "Rol de usuario no reconocido",
+            variant: "destructive",
+          })
+          setLoginStage('idle')
+          return
         }
 
         // Mostrar mensaje de bienvenida
@@ -160,7 +158,7 @@ export default function LoginPage() {
           isPageLoaded ? 'translate-x-0 opacity-100' : '-translate-x-6 opacity-0'
         }`}
         style={{
-          backgroundImage: 'url(https://itp.edu.co/ITP2022/wp-content/uploads/2023/02/245216850_2524156664394432_3397011422600315621_n-scaled.jpg)',
+          backgroundImage: 'url(https://itp.edu.co/ITP2022/wp-content/uploads/2023/02/245216850_2524156664394432_3397011422600315621_n-scaled.jpg)', //https://itp.edu.co/ITP2022/wp-content/uploads/2023/02/245216850_2524156664394432_3397011422600315621_n-scaled.jpg 
         }}>
         </div>
 
@@ -173,7 +171,7 @@ export default function LoginPage() {
             {/* Logo del ITP - Responsivo */}
             <div className="flex justify-center mb-4">
               <img 
-                src="https://sibcolombia.net/wp-content/uploads/2017/08/logo-itp.png" 
+                src="https://scontent-bog2-2.xx.fbcdn.net/v/t39.30808-6/518273401_1335532245246623_8297795156351999546_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=o9ecBuvGuCAQ7kNvwHmZeVV&_nc_oc=AdlaC-K0RX_FBTPkn4zBeY-SIcTx8YcOaVn9bl--ylUn4q7zCo9RFcoz7rOog_7w59hF85nS2tfl7fpoo1q6X-fJ&_nc_zt=23&_nc_ht=scontent-bog2-2.xx&_nc_gid=MqXomCdF-vjn0Tx9o3T-pw&oh=00_AfSTyHzvrifVRB95vfthE4Zez2shBcupwoVzTbqh5Vs7dA&oe=6889D17D" //https://sibcolombia.net/wp-content/uploads/2017/08/logo-itp.png
                 alt="Logo Instituto Tecnológico del Putumayo"
                 className="h-16 w-auto sm:h-20 md:h-24 lg:h-64 object-contain transform hover:scale-105 h-64 transition-transform duration-300"
                 onError={(e) => {
@@ -277,7 +275,7 @@ export default function LoginPage() {
       <footer className={`text-center text-xs text-gray-400 mt-6 transition-all duration-700 delay-600 ease-out ${
         isPageLoaded ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
       }`}>
-        © {new Date().getFullYear()} Instituto Tecnológico del Putumayo – Todos los derechos reservados
+        © {new Date().getFullYear()} Institución Universitaria del Putumayo – Todos los derechos reservados
       </footer>
     </div>
   )

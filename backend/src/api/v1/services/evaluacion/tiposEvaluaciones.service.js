@@ -19,10 +19,15 @@ const updateEstado = async (id, activo) => {
   }
 };
 
-const getAllTipos = async () => {
+const getAllTipos = async (pagination) => {
   try {
-    const tipos = await TiposEvaluacionModel.getAllTipos();
-    return tipos;
+    const tipos = await TiposEvaluacionModel.getAllTipos(pagination);
+    const totalCount = await TiposEvaluacionModel.getCount();
+    
+    return {
+      data: tipos,
+      totalCount
+    };
   } catch (error) {
     throw error;
   }

@@ -10,10 +10,11 @@ const {
 } = require('../../controllers/evaluacion/evaluacionDetalle.controller');
 
 const { verifyToken } = require('../../middlewares/userAuth.middleware');
+const pagination = require('../../middlewares/pagination');
 
 const router = express.Router();
 
-router.get('/', getDetalles);
+router.get('/', pagination({ defaultLimit: 10, maxLimit: 50 }), getDetalles);
 router.post('/', createDetalle);
 router.post('/bulk', verifyToken, createDetallesEvaluacion);
 router.get('/:id', getDetalleById);

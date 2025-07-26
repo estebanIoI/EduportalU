@@ -11,10 +11,12 @@ const {
 const { aspectoEvaluacionSchema } = require('../../validations/evaluacion/aspectoEvaluacion.validation');
 const { verifyToken, checkRole } = require('../../middlewares/userAuth.middleware');
 const validate = require('../../middlewares/validate');
+const pagination = require('../../middlewares/pagination');
 
 const router = express.Router();
 
-router.get('/', getAspectos);
+// Aplicar paginación solo al endpoint GET principal
+router.get('/', pagination({ defaultLimit: 10, maxLimit: 50 }), getAspectos);
 router.post('/', verifyToken, checkRole(['Admin']), validate(aspectoEvaluacionSchema), createAspecto);
 router.get('/:id', verifyToken, checkRole(['Admin']), getAspectoById);
 router.put('/:id', verifyToken, checkRole(['Admin']), validate(aspectoEvaluacionSchema), updateAspecto);

@@ -14,11 +14,12 @@ const {
 } = require('../../controllers/evaluacion/evaluaciones.controller');
 
 const { verifyToken, checkRole } = require('../../middlewares/userAuth.middleware');
+const pagination = require('../../middlewares/pagination');
 
 const router = express.Router();
 
 router.post('/insitu/crear', verifyToken, checkRole(['Admin', 'Estudiante']), createEvaluacionU);
-router.get('/', getEvaluaciones);
+router.get('/', pagination({ defaultLimit: 10, maxLimit: 50 }), getEvaluaciones);
 router.post('/', verifyToken, createEvaluacion);
 router.get('/:id', getEvaluacionById);
 router.put('/:id', verifyToken, updateEvaluacion);

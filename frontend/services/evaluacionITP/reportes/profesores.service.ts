@@ -1,6 +1,8 @@
 import { apiClient } from '@/lib/api';
-import { ApiResponse } from '@/lib/types/api.types';
+import { ApiResponse, PaginationParams, ApiPaginatedResponse } from '@/lib/types/api.types';
 import {
+  FiltersAspectosPuntaje,
+  ProfesoresFilters,
   ProfesoresParams,
   AsignaturaDocente,
   EvaluacionesEstudiantes,
@@ -10,13 +12,19 @@ import {
 } from '@/lib/types/profesores';
 
 export const profesoresService = {
-  getAsignaturas: async (params?: ProfesoresParams): Promise<ApiResponse<AsignaturaDocente[]>> => {
+  getAsignaturas: async (
+    pagination?: PaginationParams,
+    filters?: ProfesoresParams
+  ): Promise<ApiPaginatedResponse<AsignaturaDocente>> => {
     try {
-      const response = await apiClient.get<AsignaturaDocente[]>(
+      const response = await apiClient.getPaginatedSilent<AsignaturaDocente>(
         '/reportes/docentes/asignaturas',
-        { params },
-        { showMessage: false }
+        {
+          ...pagination,
+          ...filters
+        }
       );
+
       return response;
     } catch (error: any) {
       throw error;
@@ -40,11 +48,13 @@ export const profesoresService = {
     }
   },
 
-  getAspectosPuntaje: async (idDocente: string): Promise<ApiResponse<AspectoPuntaje[]>> => {
+  getAspectosPuntaje: async (
+    filters?: FiltersAspectosPuntaje
+  ): Promise<ApiResponse<AspectoPuntaje[]>> => {
     try {
       const response = await apiClient.get<AspectoPuntaje[]>(
-        `/reportes/docentes/aspectos-puntaje/${idDocente}`,
-        undefined,
+        `/reportes/docentes/aspectos-puntaje`,
+        { params: filters },
         { showMessage: false }
       );
       return response;
@@ -53,42 +63,4 @@ export const profesoresService = {
     }
   },
 
-  getProfesorDetalle: async (idDocente: string): Promise<ApiResponse<ProfesorDetalle>> => {
-    try {
-      const [asignaturasResponse, aspectosResponse] = await Promise.all([
-        profesoresService.getAsignaturas(),
-        profesoresService.getAspectosPuntaje(idDocente)
-      ]);
-
-      const asignaturas = asignaturasResponse.data;
-      const aspectos = aspectosResponse.data;
-
-      const asignaturasDocente = asignaturas.filter(
-        asig => asig.ID_DOCENTE === idDocente
-      );
-
-      const evaluacionesPromises = asignaturasDocente.map(asig =>
-        profesoresService.getEvaluacionesEstudiantes(
-          idDocente,
-          asig.COD_ASIGNATURA,
-          asig.SEMESTRE_PREDOMINANTE
-        )
-      );
-      const evaluacionesResponses = await Promise.all(evaluacionesPromises);
-
-      const profesorDetalle: ProfesorDetalle = {
-        asignaturas: asignaturasDocente,
-        evaluaciones: evaluacionesResponses[0]?.data || null,
-        aspectos
-      };
-
-      return {
-        success: true,
-        data: profesorDetalle,
-        message: 'Detalles del profesor obtenidos exitosamente'
-      };
-    } catch (error: any) {
-      throw error;
-    }
-  }
 };

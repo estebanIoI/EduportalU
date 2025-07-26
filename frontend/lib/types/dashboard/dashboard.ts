@@ -22,6 +22,8 @@ export interface DashboardStatsResponse {
   docentes_evaluados: number;
   total_docentes: number;
   porcentaje_docentes_evaluados: string;
+  estudiantes_completados: number;
+  porcentaje_estudiantes_completados: number;
 }
 
 export interface DashboardAspectosResponse {
@@ -32,27 +34,46 @@ export interface DashboardAspectosResponse {
 export interface DashboardRankingResponse {
   ID_DOCENTE: string;
   DOCENTE: string;
-  TOTAL_PUNTAJE: number;
-  TOTAL_RESPUESTAS: number;
+  PERIODO: string;
+  NOMBRE_SEDE: string;
+  NOM_PROGRAMA: string;
+  SEMESTRE: string;
+  GRUPO: string;
+  TOTAL_ESTUDIANTES: number;
+  TOTAL_ASIGNATURAS: number;
   PROMEDIO_GENERAL: number;
-  evaluaciones_esperadas: number;
-  evaluaciones_realizadas: number;
-  evaluaciones_pendientes: number;
+  PUNTAJE_AJUSTADO: number;
+  FACTOR_CONFIANZA: number;
+  TOTAL_RESPUESTAS: number;
+  EVALUACIONES_ESPERADAS: number;
+  EVALUACIONES_REALIZADAS: number;
+  EVALUACIONES_PENDIENTES: number;
+  RESPUESTAS_POR_ESTUDIANTE: number;
+  EFICIENCIA_RESPUESTAS: number;
   POSICION: string;
 }
 
 export interface DashboardPodioResponse {
   ID_DOCENTE: string;
   DOCENTE: string;
-  TOTAL_PUNTAJE: number;
-  TOTAL_RESPUESTAS: number;
+  PERIODO: string;
+  NOMBRE_SEDE: string;
+  NOM_PROGRAMA: string;
+  SEMESTRE: string;
+  GRUPO: string;
+  TOTAL_ESTUDIANTES: number;
+  TOTAL_ASIGNATURAS: number;
   PROMEDIO_GENERAL: number;
-  evaluaciones_esperadas: number;
-  evaluaciones_realizadas: number;
-  evaluaciones_pendientes: number;
+  PUNTAJE_AJUSTADO: number;
+  FACTOR_CONFIANZA: number;
+  TOTAL_RESPUESTAS: number;
+  EVALUACIONES_ESPERADAS: number;
+  EVALUACIONES_REALIZADAS: number;
+  EVALUACIONES_PENDIENTES: number;
+  RESPUESTAS_POR_ESTUDIANTE: number;
+  EFICIENCIA_RESPUESTAS: number;
   POSICION: string;
 }
-
 export interface ApiResponse<T = any> {
   success: boolean;
   data: T;

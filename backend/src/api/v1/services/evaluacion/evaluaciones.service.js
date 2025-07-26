@@ -3,10 +3,15 @@ const Evaluaciones = require('../../models/evaluacion/evaluaciones.model');
 const VistaEstudianteModel = require('../../models/vista/vistaEstudiante.model');
 const TiposEvaluacion = require('../../models/evaluacion/tiposEvaluaciones.model');
 
-const getAllEvaluaciones = async () => {
+const getAllEvaluaciones = async (pagination) => {
   try {
-    const evaluaciones = await Evaluaciones.getAllEvaluaciones();
-    return evaluaciones;
+    const evaluaciones = await Evaluaciones.getAllEvaluaciones(pagination);
+    const totalCount = await Evaluaciones.getCount();
+
+    return {
+      data: evaluaciones,
+      totalCount
+    };
   } catch (error) {
     throw error;
   }

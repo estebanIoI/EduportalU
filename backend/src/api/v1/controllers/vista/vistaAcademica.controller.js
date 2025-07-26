@@ -12,21 +12,58 @@ const getVistaAcademica = async (req, res, next) => {
 
 const getVistaAcademicaById = async (req, res, next) => {
   try {
-    const { id } = req.params; // El 'id' es el documento que se busca
+    const { id } = req.params;
     const vistaAcademica = await VistaAcademicaModel.getVistaAcademicaById(id);
     
-    // Si no se encuentra ninguna vista académica, responder con 404
     if (!vistaAcademica || vistaAcademica.length === 0) {
       return res.status(404).json({ success: false, message: 'Vista Académica no encontrada' });
     }
     
-    // Si se encuentra la vista académica, responder con 200 y los datos
     return res.status(200).json({ success: true, data: vistaAcademica });
   } catch (error) {
     next(error);
   }
 };
 
+// ENDPOINT PARA OBTENER OPCIONES DISPONIBLES SEGÚN FILTROS APLICADOS
+const getOpcionesFiltros = async (req, res, next) => {
+  try {
+    const { 
+      periodo, 
+      sede, 
+      programa, 
+      semestre 
+    } = req.query;
+
+    // Validar que periodo sea obligatorio
+    if (!periodo) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'El parámetro "periodo" es obligatorio' 
+      });
+    }
+
+    // Construir filtros aplicados
+    const filters = { periodo };
+    if (sede) filters.sede = sede;
+    if (programa) filters.programa = programa;
+    if (semestre) filters.semestre = semestre;
+
+    // Obtener opciones disponibles para el siguiente nivel
+    const opciones = await VistaAcademicaModel.getOpcionesFiltros(filters);
+    
+    return res.status(200).json({ 
+      success: true, 
+      data: opciones,
+      filters_applied: filters
+    });
+  } catch (error) {
+    console.error('Error en getOpcionesFiltros:', error);
+    next(error);
+  }
+};
+
+// Mantener endpoints existentes para compatibilidad
 const getPeriodos = async (req, res, next) => {
   try {
     const periodos = await VistaAcademicaModel.getPeriodos();
@@ -75,6 +112,7 @@ const getGrupos = async (req, res, next) => {
 module.exports = {
   getVistaAcademica,
   getVistaAcademicaById,
+  getOpcionesFiltros,       // NUEVO
   getPeriodos,
   getSedes,
   getProgramas,

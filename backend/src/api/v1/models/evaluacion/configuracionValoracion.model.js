@@ -2,12 +2,45 @@
 const { getPool } = require('../../../../db');
 
 const ConfiguracionValoracion = {
-  getAllConfiguraciones: async () => {
+  getAllConfiguraciones: async (pagination) => {
     try {
       const pool = getPool();
-      const [rows] = await pool.query('SELECT * FROM CONFIGURACION_VALORACION WHERE ACTIVO = TRUE ORDER BY ORDEN');
+      let query = `
+        SELECT * 
+        FROM CONFIGURACION_VALORACION 
+        WHERE ACTIVO = TRUE
+      `;
+      let params = [];
+      
+      if (pagination) {
+        const limit = parseInt(pagination.limit);
+        const offset = parseInt(pagination.offset);
+        if (isNaN(limit) || isNaN(offset) || limit < 1 || offset < 0) {
+          throw new Error('Parámetros de paginación inválidos');
+        }
+        query += ' ORDER BY ORDEN LIMIT ? OFFSET ?';
+        params = [limit, offset];
+      } else {
+        query += ' ORDER BY ORDEN';
+      }
+      
+      console.log('Query ejecutada:', query);
+      console.log('Parámetros:', params);
+      const [rows] = await pool.query(query, params);
       return rows;
     } catch (error) {
+      console.error('Error en getAllConfiguraciones:', error);
+      throw error;
+    }
+  },
+
+  getCount: async () => {
+    try {
+      const pool = getPool();
+      const [rows] = await pool.query('SELECT COUNT(*) as total FROM CONFIGURACION_VALORACION WHERE ACTIVO = TRUE');
+      return rows[0].total;
+    } catch (error) {
+      console.error('Error en getConfiguracionesCount:', error);
       throw error;
     }
   },

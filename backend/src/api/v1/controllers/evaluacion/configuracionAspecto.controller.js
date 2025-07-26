@@ -1,14 +1,20 @@
 // src/api/v1/controllers/evaluacion/configuracionAspecto.controller.js
 const ConfiguracionAspectoService = require('../../services/evaluacion/configuracionAspecto.service');
-const { successResponse, errorResponse } = require('../../utils/responseHandler');
+const { successResponse, successPaginatedResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getConfiguracionesAspecto = async (req, res, next) => {
   try {
-    const configuracionesAspecto = await ConfiguracionAspectoService.getAllConfiguracionesAspecto();
-    return successResponse(res, {
-      message: MESSAGES.GENERAL.FETCH_SUCCESS,
-      data: configuracionesAspecto,
+    const { pagination } = req;
+    const result = await ConfiguracionAspectoService.getAllConfiguracionesAspecto(pagination);
+    
+    // Usar el helper de paginación del middleware
+    const paginatedResponse = res.paginate(result.data, result.totalCount);
+    
+    return successPaginatedResponse(res, {
+      data: paginatedResponse.data,
+      pagination: paginatedResponse.pagination,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
     error.message = MESSAGES.GENERAL.FETCH_ERROR;

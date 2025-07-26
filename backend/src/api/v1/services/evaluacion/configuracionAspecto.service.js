@@ -1,10 +1,16 @@
 // src/api/v1/services/evaluacion/configuracionAspecto.service.js
 const ConfiguracionAspectoModel = require('../../models/evaluacion/configuracionAspecto.model');
 
-const getAllConfiguracionesAspecto = async () => {
+const getAllConfiguracionesAspecto = async (pagination) => {
   try {
-    const configuracionesAspecto = await ConfiguracionAspectoModel.getAllConfiguracionesAspecto();
-    return configuracionesAspecto;
+    const configuracionesAspecto = await ConfiguracionAspectoModel.getAllConfiguracionesAspecto(pagination);
+    const totalCount = await ConfiguracionAspectoModel.getCount();
+
+    return {
+      data: configuracionesAspecto,
+      totalCount
+    };
+
   } catch (error) {
     throw error;
   }

@@ -1,14 +1,19 @@
 // src/api/v1/controllers/evaluacion/evaluaciones.controller.js
 const EvaluacionesService = require('../../services/evaluacion/evaluaciones.service');
-const { successResponse, errorResponse } = require('../../utils/responseHandler');
+const { successResponse, successPaginatedResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getEvaluaciones = async (req, res, next) => {
   try {
-    const evaluaciones = await EvaluacionesService.getAllEvaluaciones();
-    return successResponse(res, {
-      message: MESSAGES.GENERAL.FETCH_SUCCESS,
-      data: evaluaciones,
+    const { pagination } = req;
+    const evaluaciones = await EvaluacionesService.getAllEvaluaciones(pagination);
+
+    const paginatedResponse = res.paginate(evaluaciones.data, evaluaciones.totalCount);
+
+    return successPaginatedResponse(res, {
+      data: paginatedResponse.data,
+      pagination: paginatedResponse.pagination,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
     error.message = MESSAGES.GENERAL.FETCH_ERROR;

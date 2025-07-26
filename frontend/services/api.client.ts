@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
-import { ApiResponse, ApiError, FileDownloadResponse } from '@/lib/types/api.types';
+import { ApiResponse, ApiError, FileDownloadResponse, PaginationParams, ApiPaginatedResponse } from '@/lib/types/api.types';
 import { API_CONFIG, DEFAULT_HEADERS, getEnvironmentConfig } from '@/config/api.config';
 import { setupInterceptors } from '@/services/api.interceptor';
 import { toast } from '@/hooks/use-toast';
@@ -31,6 +31,19 @@ class ApiClient {
     return response;
   }
 
+  // Método privado para manejar respuestas paginadas
+  private handlePaginatedResponse<T>(response: ApiPaginatedResponse<T>, showMessage = true): ApiPaginatedResponse<T> {
+    if (showMessage && response.success) {
+      const { currentPage, totalPages, totalItems } = response.pagination;
+      toast({
+        title: "Éxito",
+        description: response.message || `Página ${currentPage} de ${totalPages} (${totalItems} elementos)`,
+        variant: "default"
+      });
+    }
+    return response;
+  }
+
   // Método privado para manejar errores
   private handleError(error: AxiosError<ApiError>): never {
     const errorMessage = error.response?.data?.message || 'Error de conexión';
@@ -40,6 +53,34 @@ class ApiClient {
       variant: "destructive"
     });
     throw error;
+  }
+
+  // Método específico para requests con paginación
+  async getPaginated<T = any>(
+    url: string,
+    params?: PaginationParams & Record<string, any>, // Combina PaginationParams con otros params
+    config?: any,
+    options?: { showMessage?: boolean }
+  ): Promise<ApiPaginatedResponse<T>> {
+    try {
+      const response = await this.axiosInstance.get(url, {
+        ...config,
+        params: params // Envía los params directamente (sin defaults)
+      });
+
+      return this.handlePaginatedResponse(response.data, options?.showMessage);
+    } catch (error) {
+      return this.handleError(error as AxiosError<ApiError>);
+    }
+  }
+
+  // Método silencioso para requests paginados
+  async getPaginatedSilent<T = any>(
+    url: string,
+    params?: PaginationParams & Record<string, any>,
+    config?: any
+  ): Promise<ApiPaginatedResponse<T>> {
+    return this.getPaginated(url, params, config, { showMessage: false });
   }
 
   // Método específico para descargas de archivos

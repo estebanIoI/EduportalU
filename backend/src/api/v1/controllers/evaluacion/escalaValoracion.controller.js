@@ -1,14 +1,19 @@
 // src/api/v1/controllers/evaluacion/escalaValoracion.controller.js
 const EscalaValoracionService = require('../../services/evaluacion/escalaValoracion.service');
-const { successResponse, errorResponse } = require('../../utils/responseHandler');
+const { successResponse, successPaginatedResponse, errorResponse } = require('../../utils/responseHandler');
 const MESSAGES = require('../../../../constants/messages');
 
 const getEscalas = async (req, res, next) => {
   try {
-    const escalas = await EscalaValoracionService.getAllEscalas();
-    return successResponse(res, {
-      message: MESSAGES.GENERAL.FETCH_SUCCESS,
-      data: escalas,
+    const { pagination } = req;
+    const escalas = await EscalaValoracionService.getAllEscalas(pagination);
+
+    const paginatedResponse = res.paginate(escalas.data, escalas.totalCount);
+
+    return successPaginatedResponse(res, {
+      data: paginatedResponse.data,
+      pagination: paginatedResponse.pagination,
+      message: MESSAGES.GENERAL.FETCH_SUCCESS
     });
   } catch (error) {
     error.message = MESSAGES.GENERAL.FETCH_ERROR;

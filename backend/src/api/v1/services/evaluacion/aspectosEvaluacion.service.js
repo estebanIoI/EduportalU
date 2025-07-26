@@ -1,9 +1,15 @@
+// src/api/v1/services/evaluacion/aspectosEvaluacion.service.js
 const AspectosEvaluacionModel = require('../../models/evaluacion/aspectosEvaluacion.model');
 
-const getAllAspectos = async () => {
+const getAllAspectos = async (pagination) => {
   try {
-    const aspectos = await AspectosEvaluacionModel.getAllAspectos();
-    return aspectos;
+    const aspectos = await AspectosEvaluacionModel.getAllAspectos(pagination);
+    const totalCount = await AspectosEvaluacionModel.getCount();
+    
+    return {
+      data: aspectos,
+      totalCount
+    };
   } catch (error) {
     throw error;
   }

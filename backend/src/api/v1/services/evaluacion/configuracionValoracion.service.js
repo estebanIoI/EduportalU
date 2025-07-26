@@ -1,10 +1,15 @@
 // src/api/v1/services/evaluacion/configuracionValoracion.service.js
 const ConfiguracionValoracionModel = require('../../models/evaluacion/configuracionValoracion.model');
 
-const getAllConfiguraciones = async () => {
+const getAllConfiguraciones = async (pagination) => {
   try {
-    const configuraciones = await ConfiguracionValoracionModel.getAllConfiguraciones();
-    return configuraciones;
+    const configuraciones = await ConfiguracionValoracionModel.getAllConfiguraciones(pagination);
+    const totalCount = await ConfiguracionValoracionModel.getCount();
+
+    return {
+      data: configuraciones,
+      totalCount
+    };
   } catch (error) {
     throw error;
   }

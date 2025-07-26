@@ -13,6 +13,7 @@ export interface LoginData {
   refreshToken?: string;
   user: {
     id: number;
+    name: string;
     username: string;
     email: string;
     primaryRole: string;

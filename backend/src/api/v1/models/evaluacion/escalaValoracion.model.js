@@ -2,12 +2,44 @@
 const { getPool } = require('../../../../db');
 
 const EscalaValoracion = {
-  getAllEscalas: async () => {
+  getAllEscalas: async (pagination) => {
     try {
       const pool = getPool();
-      const [rows] = await pool.query('SELECT ID, VALOR, ETIQUETA, DESCRIPCION FROM ESCALA_VALORACION');
+      let query = `
+        SELECT ID, VALOR, ETIQUETA, DESCRIPCION 
+        FROM ESCALA_VALORACION
+      `;
+      let params = [];
+      
+      if (pagination) {
+        const limit = parseInt(pagination.limit);
+        const offset = parseInt(pagination.offset);
+        if (isNaN(limit) || isNaN(offset) || limit < 1 || offset < 0) {
+          throw new Error('Parámetros de paginación inválidos');
+        }
+        query += ' ORDER BY ID LIMIT ? OFFSET ?';
+        params = [limit, offset];
+      } else {
+        query += ' ORDER BY ID';
+      }
+      
+      console.log('Query ejecutada:', query);
+      console.log('Parámetros:', params);
+      const [rows] = await pool.query(query, params);
       return rows;
     } catch (error) {
+      console.error('Error en getAllEscalas:', error);
+      throw error;
+    }
+  },
+
+  getCount: async () => {
+    try {
+      const pool = getPool();
+      const [rows] = await pool.query('SELECT COUNT(*) as total FROM ESCALA_VALORACION');
+      return rows[0].total;
+    } catch (error) {
+      console.error('Error en getEscalasCount:', error);
       throw error;
     }
   },

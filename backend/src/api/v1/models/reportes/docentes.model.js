@@ -4,14 +4,8 @@ const { getPool, getRemotePool } = require('../../../../db');
 // UTILIDADES COMPARTIDAS
 // ======================================
 
-/**
- * Construye las condiciones WHERE dinámicamente para filtrado académico
- * @param {Object} filters - Filtros de consulta
- * @param {string} alias - Alias de la tabla (por defecto 'va')
- * @returns {Object} - Objeto con clause y params
- */
 const buildWhereClause = (filters, alias = 'va') => {
-  const { periodo, nombreSede, nomPrograma, semestre, grupo } = filters;
+  const { periodo, nombreSede, nomPrograma, semestre, grupo, idDocente } = filters;
   let conditions = [];
   let params = [];
   
@@ -40,18 +34,17 @@ const buildWhereClause = (filters, alias = 'va') => {
     params.push(grupo);
   }
   
+  if (idDocente) {
+    conditions.push(`${alias}.ID_DOCENTE = ?`);
+    params.push(idDocente);
+  }
+  
   return {
     clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
     params
   };
 };
 
-/**
- * Obtiene datos académicos filtrados de la vista remota
- * @param {Object} filters - Filtros de consulta
- * @param {Array} campos - Campos a seleccionar
- * @returns {Array} - Datos académicos filtrados
- */
 const getAcademicData = async (filters, campos = ['ID_ESTUDIANTE', 'COD_ASIGNATURA', 'ID_DOCENTE']) => {
   const remotePool = await getRemotePool();
   const whereClause = buildWhereClause(filters, 'va');
@@ -66,21 +59,11 @@ const getAcademicData = async (filters, campos = ['ID_ESTUDIANTE', 'COD_ASIGNATU
   return data;
 };
 
-/**
- * Crea placeholders para consultas IN con arrays simples
- * @param {Array} items - Array de items
- * @returns {Object} - Placeholders y parámetros
- */
 const createSimpleInPlaceholders = (items) => {
   const placeholders = items.map(() => '?').join(', ');
   return { placeholders, params: items };
 };
 
-/**
- * Crea placeholders para consultas IN con pares de valores
- * @param {Array} items - Array de items con estudiante y asignatura
- * @returns {Object} - Placeholders y parámetros planos
- */
 const createInPlaceholders = (items) => {
   const placeholders = items.map(() => '(?, ?)').join(', ');
   const params = items.flatMap(item => [
@@ -90,34 +73,17 @@ const createInPlaceholders = (items) => {
   return { placeholders, params };
 };
 
-/**
- * Calcula el promedio con redondeo a 2 decimales
- * @param {Array} valores - Array de números
- * @returns {number} - Promedio redondeado
- */
 const calcularPromedio = (valores) => {
   if (valores.length === 0) return 0.00;
   const suma = valores.reduce((sum, valor) => sum + parseFloat(valor || 0), 0);
   return parseFloat((suma / valores.length).toFixed(2));
 };
 
-/**
- * Calcula porcentaje con redondeo a 2 decimales
- * @param {number} numerador 
- * @param {number} denominador 
- * @returns {number} - Porcentaje redondeado
- */
 const calcularPorcentaje = (numerador, denominador) => {
   if (denominador === 0) return 0;
   return Math.round((numerador / denominador) * 100 * 100) / 100;
 };
 
-/**
- * Obtiene evaluaciones completadas del pool principal
- * @param {number} idConfiguracion - ID de configuración
- * @param {Array} combinaciones - Array de combinaciones estudiante-asignatura
- * @returns {Map} - Mapa de evaluaciones completadas
- */
 const getCompletedEvaluationsMap = async (idConfiguracion, combinaciones) => {
   if (combinaciones.length === 0) return new Map();
   
@@ -141,7 +107,6 @@ const getCompletedEvaluationsMap = async (idConfiguracion, combinaciones) => {
   const evaluationMap = new Map();
   evaluacionesData.forEach(row => {
     const key = `${row.DOCUMENTO_ESTUDIANTE}-${row.CODIGO_MATERIA}`;
-    // Solo contar como completada si tiene evaluacion_detalle
     if (row.detalle_id !== null) {
       evaluationMap.set(key, true);
     }
@@ -151,14 +116,9 @@ const getCompletedEvaluationsMap = async (idConfiguracion, combinaciones) => {
 };
 
 // ======================================
-// FUNCIONES DE PROCESAMIENTO DE DATOS
+// FUNCIONES DE PROCESAMIENTO DE DATOS MEJORADAS
 // ======================================
 
-/**
- * Encuentra el valor predominante en un Map de contadores
- * @param {Map} countsMap - Map con contadores
- * @returns {*} - Valor predominante
- */
 const findPredominantValue = (countsMap) => {
   let maxCount = 0;
   let predominantValue = null;
@@ -167,186 +127,284 @@ const findPredominantValue = (countsMap) => {
     if (count > maxCount) {
       maxCount = count;
       predominantValue = value;
+    } else if (count === maxCount) {
+      // En caso de empate, preferir el semestre más bajo
+      if (value < predominantValue) {
+        predominantValue = value;
+      }
     }
   });
   
   return predominantValue;
 };
 
-/**
- * Procesa datos académicos para docentes-asignaturas
- * @param {Array} academicData - Datos académicos
- * @returns {Map} - Mapa procesado de docentes-asignaturas
- */
-const processAcademicDataForTeachersAssignments = (academicData) => {
-  const processedData = new Map();
-  
-  academicData.forEach(academic => {
-    const key = `${academic.COD_ASIGNATURA}-${academic.ID_DOCENTE}`;
+const processAcademicDataForTeachersAssignments = (academicData, filters = {}) => {
+  // Paso 1: Calcular semestres predominantes por asignatura
+  const subjectSemesterMap = new Map();
+
+  academicData.forEach(row => {
+    const subjectKey = `${row.ID_DOCENTE}-${row.COD_ASIGNATURA}-${row.NOMBRE_SEDE}`;
     
-    if (!processedData.has(key)) {
-      processedData.set(key, {
-        COD_ASIGNATURA: academic.COD_ASIGNATURA,
-        ASIGNATURA: academic.ASIGNATURA,
-        ID_DOCENTE: academic.ID_DOCENTE,
-        DOCENTE: academic.DOCENTE,
+    if (!subjectSemesterMap.has(subjectKey)) {
+      subjectSemesterMap.set(subjectKey, {
         semesterCounts: new Map(),
         programCounts: new Map(),
-        sedeGrupoData: new Map()
+        allStudents: []
       });
     }
     
-    const data = processedData.get(key);
+    const subjectData = subjectSemesterMap.get(subjectKey);
+    subjectData.allStudents.push(row);
     
-    // Contar semestres para encontrar el predominante
-    const semCount = data.semesterCounts.get(academic.SEMESTRE) || 0;
-    data.semesterCounts.set(academic.SEMESTRE, semCount + 1);
+    // Contar semestres para determinar predominante
+    const semCount = subjectData.semesterCounts.get(row.SEMESTRE) || 0;
+    subjectData.semesterCounts.set(row.SEMESTRE, semCount + 1);
     
-    // Contar programas para encontrar el predominante
-    const progCount = data.programCounts.get(academic.NOM_PROGRAMA) || 0;
-    data.programCounts.set(academic.NOM_PROGRAMA, progCount + 1);
+    // Contar programas para determinar predominante
+    const progCount = subjectData.programCounts.get(row.NOM_PROGRAMA) || 0;
+    subjectData.programCounts.set(row.NOM_PROGRAMA, progCount + 1);
+  });
+
+  // Paso 2: Determinar semestre predominante para cada asignatura
+  const predominantSemesters = new Map();
+  subjectSemesterMap.forEach((data, key) => {
+    let maxCount = 0;
+    let predominantSemester = '';
     
-    // Agrupar por sede y grupo
-    const sedeGrupoKey = `${academic.NOMBRE_SEDE}-${academic.GRUPO}`;
-    if (!data.sedeGrupoData.has(sedeGrupoKey)) {
-      data.sedeGrupoData.set(sedeGrupoKey, {
-        NOMBRE_SEDE: academic.NOMBRE_SEDE,
-        GRUPO: academic.GRUPO,
-        estudiantes: new Set()
+    data.semesterCounts.forEach((count, semester) => {
+      if (count > maxCount || (count === maxCount && semester < predominantSemester)) {
+        maxCount = count;
+        predominantSemester = semester;
+      }
+    });
+    
+    predominantSemesters.set(key, predominantSemester);
+  });
+
+  // Paso 3: Reorganizar los datos
+  const finalData = new Map();
+  
+  subjectSemesterMap.forEach((subjectData, subjectKey) => {
+    const [idDocente, codAsignatura, nombreSede] = subjectKey.split('-');
+    const predominantSemester = predominantSemesters.get(subjectKey);
+    
+    // Aplicar filtro de semestre si existe
+    if (filters.semestre && filters.semestre !== predominantSemester) {
+      return; // Saltar asignaturas que no coincidan con el filtro
+    }
+    
+    const predominantProgram = findPredominantValue(subjectData.programCounts);
+    
+    if (!finalData.has(idDocente)) {
+      finalData.set(idDocente, {
+        ID_DOCENTE: idDocente,
+        DOCENTE: subjectData.allStudents[0].DOCENTE,
+        total_evaluaciones_esperadas: 0,
+        evaluaciones_completadas: 0,
+        asignaturas: new Map()
       });
     }
     
-    // Agregar estudiante único por asignatura
-    const uniqueKey = `${academic.ID_ESTUDIANTE}-${academic.COD_ASIGNATURA}`;
-    data.sedeGrupoData.get(sedeGrupoKey).estudiantes.add(uniqueKey);
+    const docenteData = finalData.get(idDocente);
+    const asignaturaKey = `${codAsignatura}-${nombreSede}`;
+    
+    if (!docenteData.asignaturas.has(asignaturaKey)) {
+      docenteData.asignaturas.set(asignaturaKey, {
+        SEMESTRE_PREDOMINANTE: predominantSemester,
+        PROGRAMA_PREDOMINANTE: predominantProgram,
+        COD_ASIGNATURA: codAsignatura,
+        ASIGNATURA: subjectData.allStudents[0].ASIGNATURA,
+        NOMBRE_SEDE: nombreSede,
+        grupos: new Map(),
+        total_evaluaciones_esperadas: 0,
+        evaluaciones_completadas: 0
+      });
+    }
+    
+    const asignaturaData = docenteData.asignaturas.get(asignaturaKey);
+    
+    // Procesar estudiantes
+    subjectData.allStudents.forEach(student => {
+      const grupo = student.GRUPO;
+      
+      if (!asignaturaData.grupos.has(grupo)) {
+        asignaturaData.grupos.set(grupo, {
+          GRUPO: grupo,
+          total_evaluaciones_esperadas: 0,
+          evaluaciones_completadas: 0,
+          estudiantes: new Set()
+        });
+      }
+      
+      const grupoData = asignaturaData.grupos.get(grupo);
+      const studentKey = `${student.ID_ESTUDIANTE}-${codAsignatura}`;
+      
+      if (!grupoData.estudiantes.has(studentKey)) {
+        grupoData.estudiantes.add(studentKey);
+        grupoData.total_evaluaciones_esperadas += 1;
+        asignaturaData.total_evaluaciones_esperadas += 1;
+        docenteData.total_evaluaciones_esperadas += 1;
+      }
+    });
+  });
+
+  // Convertir a estructura final
+  return Array.from(finalData.values()).map(docente => ({
+    ...docente,
+    asignaturas: Array.from(docente.asignaturas.values()).map(asignatura => ({
+      ...asignatura,
+      grupos: Array.from(asignatura.grupos.values())
+    }))
+  }));
+};
+
+const buildTeachersAssignmentsResults = (processedData, evaluationMap) => {
+  processedData.forEach(docente => {
+    docente.asignaturas.forEach(asignatura => {
+      asignatura.grupos.forEach(grupo => {
+        let completadas = 0;
+        
+        grupo.estudiantes.forEach(studentKey => {
+          if (evaluationMap.has(studentKey)) {
+            completadas++;
+          }
+        });
+        
+        grupo.evaluaciones_completadas = completadas;
+        grupo.porcentaje_completado = calcularPorcentaje(completadas, grupo.total_evaluaciones_esperadas);
+        
+        asignatura.evaluaciones_completadas += completadas;
+      });
+      
+      asignatura.porcentaje_completado = calcularPorcentaje(
+        asignatura.evaluaciones_completadas,
+        asignatura.total_evaluaciones_esperadas
+      );
+      
+      docente.evaluaciones_completadas += asignatura.evaluaciones_completadas;
+    });
+    
+    docente.evaluaciones_pendientes = docente.total_evaluaciones_esperadas - docente.evaluaciones_completadas;
+    docente.porcentaje_completado = calcularPorcentaje(
+      docente.evaluaciones_completadas,
+      docente.total_evaluaciones_esperadas
+    );
+    
+    docente.estado_evaluacion = 
+      docente.evaluaciones_pendientes === 0 ? 'COMPLETADO' :
+      docente.evaluaciones_completadas === 0 ? 'NO INICIADO' : 'EN PROGRESO';
   });
   
   return processedData;
-};
-
-/**
- * Construye resultados finales para docentes-asignaturas
- * @param {Map} processedData - Datos procesados
- * @param {Map} evaluationMap - Mapa de evaluaciones completadas
- * @returns {Array} - Array de resultados finales
- */
-const buildTeachersAssignmentsResults = (processedData, evaluationMap) => {
-  const resultMap = new Map();
-  
-  processedData.forEach((data, key) => {
-    // Encontrar valores predominantes
-    const predominantSemester = findPredominantValue(data.semesterCounts);
-    const predominantProgram = findPredominantValue(data.programCounts);
-    
-    // Crear resultados para cada combinación sede-grupo
-    data.sedeGrupoData.forEach((sedeGrupoInfo, sedeGrupoKey) => {
-      const resultKey = `${key}-${sedeGrupoKey}`;
-      
-      let evaluaciones_completadas = 0;
-      
-      // Contar evaluaciones completadas
-      sedeGrupoInfo.estudiantes.forEach(uniqueStudentKey => {
-        if (evaluationMap.has(uniqueStudentKey)) {
-          evaluaciones_completadas++;
-        }
-      });
-      
-      const total_evaluaciones_esperadas = sedeGrupoInfo.estudiantes.size;
-      const evaluaciones_pendientes = total_evaluaciones_esperadas - evaluaciones_completadas;
-      const porcentaje_completado = calcularPorcentaje(evaluaciones_completadas, total_evaluaciones_esperadas);
-      
-      // Determinar estado de evaluación
-      let estado_evaluacion;
-      if (evaluaciones_pendientes === 0 && total_evaluaciones_esperadas > 0) {
-        estado_evaluacion = 'COMPLETADO';
-      } else if (evaluaciones_completadas === 0) {
-        estado_evaluacion = 'NO INICIADO';
-      } else {
-        estado_evaluacion = 'EN PROGRESO';
-      }
-      
-      resultMap.set(resultKey, {
-        COD_ASIGNATURA: data.COD_ASIGNATURA,
-        ASIGNATURA: data.ASIGNATURA,
-        ID_DOCENTE: data.ID_DOCENTE,
-        DOCENTE: data.DOCENTE,
-        SEMESTRE_PREDOMINANTE: predominantSemester,
-        PROGRAMA_PREDOMINANTE: predominantProgram,
-        NOMBRE_SEDE: sedeGrupoInfo.NOMBRE_SEDE,
-        GRUPO: sedeGrupoInfo.GRUPO,
-        total_evaluaciones_esperadas,
-        evaluaciones_completadas,
-        evaluaciones_pendientes,
-        porcentaje_completado,
-        estado_evaluacion
-      });
-    });
-  });
-  
-  return Array.from(resultMap.values());
 };
 
 // ======================================
 // FUNCIONES PRINCIPALES DE NEGOCIO
 // ======================================
 
-/**
- * Obtiene datos de docentes y asignaturas con estadísticas
- */
-const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
+const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo, pagination }) => {
   try {
     const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
     
-    // Obtener datos académicos completos
-    const academicData = await getAcademicData(filters, [
+    // Obtener datos académicos sin filtrar por semestre predominante
+    const academicData = await getAcademicData({ ...filters, semestre: undefined }, [
       'COD_ASIGNATURA', 'ASIGNATURA', 'ID_DOCENTE', 'DOCENTE',
       'SEMESTRE', 'NOM_PROGRAMA', 'NOMBRE_SEDE', 'GRUPO', 'ID_ESTUDIANTE'
     ]);
-
-    if (academicData.length === 0) {
-      return [];
-    }
-
-    // Crear combinaciones únicas estudiante-asignatura para obtener evaluaciones
+    
+    if (academicData.length === 0) return [];
+    
+    // Obtener evaluaciones completadas
     const combinaciones = academicData
       .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
       .filter((item, index, self) =>
         index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
       );
-
-    // Obtener mapa de evaluaciones completadas
+    
     const evaluationMap = await getCompletedEvaluationsMap(idConfiguracion, combinaciones);
-
-    // Procesar datos académicos
-    const processedData = processAcademicDataForTeachersAssignments(academicData);
-
-    // Construir y ordenar resultados finales
-    const finalResults = buildTeachersAssignmentsResults(processedData, evaluationMap);
+    
+    // Procesar datos aplicando filtro de semestre predominante
+    const processedData = processAcademicDataForTeachersAssignments(academicData, { semestre });
+    
+    // Construir resultados finales
+    const finalResults = processedData.map(docente => {
+      let evaluaciones_completadas = 0;
+      
+      docente.asignaturas.forEach(asignatura => {
+        asignatura.grupos.forEach(grupo => {
+          let completadas = 0;
+          grupo.estudiantes.forEach(studentKey => {
+            if (evaluationMap.has(studentKey)) completadas++;
+          });
+          
+          grupo.evaluaciones_completadas = completadas;
+          grupo.porcentaje_completado = calcularPorcentaje(completadas, grupo.total_evaluaciones_esperadas);
+          evaluaciones_completadas += completadas;
+        });
+      });
+      
+      return {
+        ...docente,
+        evaluaciones_completadas,
+        evaluaciones_pendientes: docente.total_evaluaciones_esperadas - evaluaciones_completadas,
+        porcentaje_completado: calcularPorcentaje(evaluaciones_completadas, docente.total_evaluaciones_esperadas),
+        estado_evaluacion: 
+          evaluaciones_completadas === 0 ? 'NO INICIADO' :
+          docente.total_evaluaciones_esperadas === evaluaciones_completadas ? 'COMPLETADO' : 'EN PROGRESO'
+      };
+    });
+    
     finalResults.sort((a, b) => b.porcentaje_completado - a.porcentaje_completado);
-
+    
+    if (pagination) {
+      const limit = parseInt(pagination.limit);
+      const offset = parseInt(pagination.offset);
+      return finalResults.slice(offset, offset + limit);
+    }
+    
     return finalResults;
-
   } catch (error) {
     console.error('Error in getDocentesAsignaturasModel:', error);
     throw error;
   }
 };
 
-/**
- * Obtiene estadísticas de estudiantes evaluados por docente
- */
+const getCount = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
+  try {
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
+    const academicData = await getAcademicData(filters, [
+      'COD_ASIGNATURA', 'ASIGNATURA', 'ID_DOCENTE', 'DOCENTE',
+      'SEMESTRE', 'NOM_PROGRAMA', 'NOMBRE_SEDE', 'GRUPO', 'ID_ESTUDIANTE'
+    ]);
+    
+    if (academicData.length === 0) return 0;
+    
+    const combinaciones = academicData
+      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .filter((item, index, self) =>
+        index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
+      );
+    
+    const evaluationMap = await getCompletedEvaluationsMap(idConfiguracion, combinaciones);
+    const processedData = processAcademicDataForTeachersAssignments(academicData);
+    const finalResults = buildTeachersAssignmentsResults(processedData, evaluationMap);
+    
+    return finalResults.length;
+  } catch (error) {
+    console.error('Error en getDocentesAsignaturasCount:', error);
+    throw error;
+  }
+};
+
 const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => {
   try {
     const remotePool = await getRemotePool();
     const localPool = await getPool();
     
-    // Obtener estudiantes desde vista_academica_insitus
     const estudiantesQuery = `
       SELECT DISTINCT ID_ESTUDIANTE
       FROM vista_academica_insitus
-      WHERE ID_DOCENTE = ? 
-        AND COD_ASIGNATURA = ? 
-        AND GRUPO = ?
+      WHERE ID_DOCENTE = ? AND COD_ASIGNATURA = ? AND GRUPO = ?
     `;
     const [estudiantes] = await remotePool.query(estudiantesQuery, [idDocente, codAsignatura, grupo]);
     
@@ -358,7 +416,6 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
       };
     }
     
-    // Crear combinaciones para consulta de evaluaciones
     const combinaciones = estudiantes.map(est => ({
       estudiante: est.ID_ESTUDIANTE,
       asignatura: codAsignatura
@@ -366,7 +423,6 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
     
     const { placeholders, params } = createInPlaceholders(combinaciones);
     
-    // Obtener evaluaciones completadas
     const evaluacionesQuery = `
       SELECT 
         e.DOCUMENTO_ESTUDIANTE,
@@ -378,7 +434,6 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
     `;
     const [evaluaciones] = await localPool.query(evaluacionesQuery, params);
     
-    // Procesar resultados
     const total_estudiantes = estudiantes.length;
     const estudiantesConEvaluacion = new Set(
       evaluaciones
@@ -386,15 +441,11 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
         .map(ev => ev.DOCUMENTO_ESTUDIANTE)
     );
     
-    const evaluaciones_realizadas = estudiantesConEvaluacion.size;
-    const evaluaciones_sin_realizar = total_estudiantes - evaluaciones_realizadas;
-    
     return {
       total_estudiantes,
-      evaluaciones_realizadas,
-      evaluaciones_sin_realizar
+      evaluaciones_realizadas: estudiantesConEvaluacion.size,
+      evaluaciones_sin_realizar: total_estudiantes - estudiantesConEvaluacion.size
     };
-
   } catch (error) {
     console.error('Error in getEstudiantesEvaluadosModel:', error);
     throw error;
@@ -402,45 +453,59 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
 };
 
 /**
- * Obtiene puntajes promedio por aspectos de evaluación para un docente
+ * Obtiene puntajes promedio por aspectos de evaluación para un docente con filtros
  */
-const getAspectosPuntajeModel = async (idDocente) => {
+const getAspectosPuntajeModel = async ({ idDocente, idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
   try {
     const remotePool = await getRemotePool();
     const localPool = await getPool();
-    
-    // Obtener datos de la vista académica
+
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo, idDocente };
+    const whereClause = buildWhereClause(filters, 'va');
+
     const vistaQuery = `
-      SELECT 
-        ID_DOCENTE, 
-        DOCENTE, 
-        ID_ESTUDIANTE, 
-        COD_ASIGNATURA
-      FROM vista_academica_insitus 
-      WHERE ID_DOCENTE = ?
+      SELECT DISTINCT
+        va.ID_DOCENTE, 
+        va.DOCENTE, 
+        va.ID_ESTUDIANTE, 
+        va.COD_ASIGNATURA,
+        va.SEMESTRE,
+        va.NOM_PROGRAMA,
+        va.NOMBRE_SEDE,
+        va.GRUPO,
+        va.PERIODO
+      FROM vista_academica_insitus va
+      ${whereClause.clause}
     `;
-    
-    const [vistaData] = await remotePool.query(vistaQuery, [idDocente]);
-    
+
+    //console.log('[DEBUG] vistaQuery:', vistaQuery);
+    //console.log('[DEBUG] vistaParams:', whereClause.params);
+
+    const [vistaData] = await remotePool.query(vistaQuery, whereClause.params);
+
+    //console.log('[DEBUG] vistaData:', vistaData);
+
     if (vistaData.length === 0) {
+      console.warn('[WARN] No se encontraron registros en vista_academica_insitus con los filtros dados.');
       return [];
     }
-    
-    // Crear combinaciones únicas estudiante-asignatura
+
     const combinaciones = vistaData
       .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
       .filter((item, index, self) =>
         index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
       );
 
+    //console.log('[DEBUG] combinaciones estudiante-asignatura:', combinaciones);
+
     if (combinaciones.length === 0) {
+      console.warn('[WARN] No se generaron combinaciones únicas de estudiante-asignatura.');
       return [];
     }
 
     const { placeholders, params } = createInPlaceholders(combinaciones);
-    
-    // Obtener datos de evaluaciones con aspectos y puntajes
-    const evaluacionesQuery = `
+
+    let evaluacionesQuery = `
       SELECT 
         e.DOCUMENTO_ESTUDIANTE,
         e.CODIGO_MATERIA,
@@ -453,50 +518,75 @@ const getAspectosPuntajeModel = async (idDocente) => {
       JOIN configuracion_valoracion cv ON ed.VALORACION_ID = cv.VALORACION_ID
       WHERE (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
     `;
-    
-    const [evaluacionesData] = await localPool.query(evaluacionesQuery, params);
-    
-    // Procesar evaluaciones y calcular promedios por aspecto
+
+    const evaluacionesParams = [...params];
+
+    if (idConfiguracion) {
+      evaluacionesQuery += ' AND e.ID_CONFIGURACION = ?';
+      evaluacionesParams.push(idConfiguracion);
+    }
+
+    evaluacionesQuery += ' ORDER BY a.ETIQUETA';
+
+    //console.log('[DEBUG] evaluacionesQuery:', evaluacionesQuery);
+    //console.log('[DEBUG] evaluacionesParams:', evaluacionesParams);
+
+    const [evaluacionesData] = await localPool.query(evaluacionesQuery, evaluacionesParams);
+
+    //console.log('[DEBUG] evaluacionesData:', evaluacionesData);
+
+    if (evaluacionesData.length === 0) {
+      console.warn('[WARN] No se encontraron evaluaciones en la base de datos local.');
+      return [];
+    }
+
     const resultMap = new Map();
-    
+
     evaluacionesData.forEach(eval => {
       const key = eval.ASPECTO;
-      
+
       if (!resultMap.has(key)) {
         resultMap.set(key, {
-          ID_DOCENTE: idDocente,
-          DOCENTE: vistaData[0].DOCENTE,
           ASPECTO: eval.ASPECTO,
           descripcion: eval.descripcion,
           puntajes: []
         });
       }
-      
-      const puntajeNum = parseFloat(eval.PUNTAJE) || 0;
-      resultMap.get(key).puntajes.push(puntajeNum);
+
+      resultMap.get(key).puntajes.push(parseFloat(eval.PUNTAJE) || 0);
     });
-    
-    // Calcular promedios y formatear resultado final
+
     const result = Array.from(resultMap.values()).map(item => ({
-      ID_DOCENTE: item.ID_DOCENTE,
-      DOCENTE: item.DOCENTE,
       ASPECTO: item.ASPECTO,
       descripcion: item.descripcion,
-      PUNTAJE_PROMEDIO: calcularPromedio(item.puntajes)
+      PUNTAJE_PROMEDIO: calcularPromedio(item.puntajes),
+      TOTAL_EVALUACIONES: item.puntajes.length
     }));
-    
-    // Ordenar por aspecto
+
     result.sort((a, b) => a.ASPECTO.localeCompare(b.ASPECTO));
-    
+
+    if (vistaData.length > 0) {
+      const docenteInfo = vistaData[0];
+      return result.map(item => ({
+        ID_DOCENTE: docenteInfo.ID_DOCENTE,
+        DOCENTE: docenteInfo.DOCENTE,
+        SEMESTRE: docenteInfo.SEMESTRE,
+        NOM_PROGRAMA: docenteInfo.NOM_PROGRAMA,
+        NOMBRE_SEDE: docenteInfo.NOMBRE_SEDE,
+        GRUPO: docenteInfo.GRUPO,
+        ...item
+      }));
+    }
+
     return result;
-    
   } catch (error) {
-    console.error('Error en getAspectosPuntajeModel:', error);
+    console.error('[ERROR] Error en getAspectosPuntajeModel:', error);
     throw error;
   }
 };
 
 module.exports = {
+  getCount,
   getDocentesAsignaturasModel,
   getEstudiantesEvaluadosModel,
   getAspectosPuntajeModel

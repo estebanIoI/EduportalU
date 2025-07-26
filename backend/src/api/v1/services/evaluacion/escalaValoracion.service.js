@@ -1,10 +1,15 @@
 // src/api/v1/services/evaluacion/escalaValoracion.service.js
 const EscalaValoracionModel = require('../../models/evaluacion/escalaValoracion.model');
 
-const getAllEscalas = async () => {
+const getAllEscalas = async (pagination) => {
   try {
-    const escalas = await EscalaValoracionModel.getAllEscalas();
-    return escalas;
+    const escalas = await EscalaValoracionModel.getAllEscalas(pagination);
+    const totalCount = await EscalaValoracionModel.getCount();
+
+    return {
+      data: escalas,
+      totalCount
+    };
   } catch (error) {
     throw error;
   }

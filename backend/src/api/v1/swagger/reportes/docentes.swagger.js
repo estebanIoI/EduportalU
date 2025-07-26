@@ -18,13 +18,13 @@
  *         schema:
  *           type: integer
  *         description: ID de configuración de evaluación
- *         example: 123
+ *         example: 1
  *       - in: query
  *         name: periodo
  *         schema:
  *           type: string
  *         description: Período académico
- *         example: "2025-5"
+ *         example: "2025-1"
  *       - in: query
  *         name: nombreSede
  *         schema:
@@ -275,17 +275,53 @@
 
 /**
  * @swagger
- * /reportes/docentes/aspectos-puntaje/{idDocente}:
+ * /reportes/docentes/aspectos-puntaje:
  *   get:
  *     summary: Obtiene aspectos y puntajes promedio por docente
  *     tags: [Reportes Docentes]
  *     parameters:
- *       - in: path
+ *       - in: query
  *         name: idDocente
  *         required: true
  *         schema:
  *           type: string
  *         description: ID del docente
+ *       - in: query
+ *         name: idConfiguracion
+ *         schema:
+ *           type: integer
+ *         description: ID de configuración de evaluación
+ *         example: 1
+ *       - in: query
+ *         name: periodo
+ *         schema:
+ *           type: string
+ *         description: Período académico
+ *         example: "2025-1"
+ *       - in: query
+ *         name: nombreSede
+ *         schema:
+ *           type: string
+ *         description: Nombre de la sede educativa
+ *         example: "SEDE NORTE"
+ *       - in: query
+ *         name: nomPrograma
+ *         schema:
+ *           type: string
+ *         description: Nombre del programa académico
+ *         example: "Estadística"
+ *       - in: query
+ *         name: semestre
+ *         schema:
+ *           type: string
+ *         description: Semestre académico
+ *         example: "4 SEMESTRE"
+ *       - in: query
+ *         name: grupo
+ *         schema:
+ *           type: string
+ *         description: Grupo específico
+ *         example: "G2"
  *     responses:
  *       200:
  *         description: Lista de aspectos y puntajes promedio

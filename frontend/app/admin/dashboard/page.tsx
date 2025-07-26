@@ -257,12 +257,12 @@ export default function AdminDashboard() {
                   <div className="mt-2">
                     <div className="flex justify-between text-sm text-gray-500 mb-1">
                       <span>Evaluaciones Completadas</span>
-                      <span>{stats?.evaluaciones_completadas || 0} de {stats?.total_evaluaciones || 0}</span>
+                      <span>{stats?.estudiantes_completados || 0} de {((stats?.total_estudiantes ?? 0) - (stats?.estudiantes_completados ?? 0))}</span>
                     </div>
                     <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
                       <div 
-                        className={`h-full ${getProgressColor((stats?.evaluaciones_completadas || 0) / (stats?.total_evaluaciones || 1) * 100)}`}
-                        style={{ width: `${(stats?.evaluaciones_completadas || 0) / (stats?.total_evaluaciones || 1) * 100}%` }}
+                        className={`h-full ${getProgressColor((stats?.estudiantes_completados || 0) / (stats?.total_estudiantes || 1) * 100)}`}
+                        style={{ width: `${(stats?.estudiantes_completados || 0) / (stats?.total_estudiantes || 1) * 100}%` }}
                       />
                     </div>
                   </div>
@@ -278,7 +278,7 @@ export default function AdminDashboard() {
                   <div className="mt-2">
                     <div className="flex justify-between text-sm text-gray-500 mb-1">
                       <span>Docentes Evaluados</span>
-                      <span>{stats?.docentes_evaluados || 0} de {stats?.total_docentes || 0}</span>
+                      <span>{stats?.docentes_evaluados || 0} de {((stats?.total_docentes ?? 0) - (stats?.docentes_evaluados ?? 0))}</span>
                     </div>
                     <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
                       <div 
@@ -295,8 +295,19 @@ export default function AdminDashboard() {
                   <CardTitle className="text-gray-900">Evaluaciones Pendientes</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-4xl font-bold text-gray-900">{stats?.evaluaciones_pendientes || 0}</div>
-                  <p className="text-sm text-gray-500">Evaluaciones por realizar</p>
+                  <div className="text-4xl font-bold text-gray-900">{stats?.total_evaluaciones || 0}</div>
+                  <div className="mt-2">
+                    <div className="flex justify-between text-sm text-gray-500 mb-1">
+                      <span>Evaluaciones por realizar</span>
+                      <span>{stats?.evaluaciones_completadas || 0} de {stats?.evaluaciones_pendientes || 0}</span>
+                    </div>
+                    <div className="relative h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                      <div 
+                        className={`h-full ${getProgressColor((stats?.evaluaciones_completadas || 0) / (stats?.total_evaluaciones || 1) * 100)}`}
+                        style={{ width: `${(stats?.evaluaciones_completadas || 0) / (stats?.total_evaluaciones || 1) * 100}%` }}
+                      />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -333,7 +344,7 @@ export default function AdminDashboard() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                               </svg>
                               <span className="text-sm text-gray-500">
-                                {docente.evaluaciones_realizadas || 0} de {docente.evaluaciones_esperadas || 0} evaluaciones
+                                {docente.EVALUACIONES_REALIZADAS || 0} de {docente.EVALUACIONES_ESPERADAS || 0} evaluaciones
                               </span>
                             </div>
                           </div>
@@ -380,7 +391,7 @@ export default function AdminDashboard() {
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
                                 <span className="text-sm text-gray-500">
-                                  {docente.evaluaciones_realizadas || 0} de {docente.evaluaciones_esperadas || 0} evaluaciones
+                                  {docente.EVALUACIONES_REALIZADAS || 0} de {docente.EVALUACIONES_ESPERADAS || 0} evaluaciones
                                 </span>
                               </div>
                             </div>
@@ -423,7 +434,7 @@ export default function AdminDashboard() {
                             <div className="flex items-center gap-2 mt-1">
                               <div className="flex items-center gap-1">
                                 <span className="text-sm text-gray-500">
-                                  {docente.evaluaciones_realizadas || 0} de {docente.evaluaciones_esperadas || 0} evaluaciones
+                                  {docente.EVALUACIONES_REALIZADAS || 0} de {docente.EVALUACIONES_ESPERADAS || 0} evaluaciones
                                 </span>
                               </div>
                             </div>
