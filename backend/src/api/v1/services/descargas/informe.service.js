@@ -3,74 +3,160 @@ const path = require('path');
 const PizZip = require('pizzip');
 const Docxtemplater = require('docxtemplater');
 
-const { getDocentesAsignaturasModel } = require('../../models/reportes/docentes.model');
+const { getInformeDownload } = require('../../models/reportes/docentes.model');
 
 const generarInformeDocentes = async (filtros) => {
   try {
+    console.log('Iniciando generación de informe...');
+    
+    // Obtener datos del modelo
+    const datosDocentes = await getInformeDownload(filtros);
+    
+    // Procesar datos para el template
+    const datosParaTemplate = procesarDatosParaTemplate(datosDocentes);
+    
     // Leer el template
-    const content = fs.readFileSync(path.join(__dirname, '../../templates/docentes.docx'), 'binary');
+    const templatePath = path.join(__dirname, '../../templates/docentes.docx');
+    const content = fs.readFileSync(templatePath, 'binary');
+    
     const zip = new PizZip(content);
-    const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
-
-    // Obtener los datos del modelo
-    const docentesData = await getDocentesAsignaturasModel(filtros);
-
-    // Verificar que tenemos datos
-    if (!docentesData || !Array.isArray(docentesData)) {
-      throw new Error('No se obtuvieron datos válidos del modelo');
-    }
-
-    // Extraer un solo programa, semestre y sede (asumiendo que son iguales para todos)
-    const primerRegistro = docentesData[0];
-    const programa = primerRegistro.PROGRAMA_PREDOMINANTE;
-    const semestre = primerRegistro.SEMESTRE_PREDOMINANTE;
-    const sede = primerRegistro.NOMBRE_SEDE;
-
-    // Preparar los datos para Docxtemplater
-    const templateData = {
-      // Datos globales (nivel raíz)
-      PROGRAMA_PREDOMINANTE: programa,
-      SEMESTRE_PREDOMINANTE: semestre,
-      NOMBRE_SEDE: sede,
-
-      // Datos por docente/asignatura
-      docentes: docentesData.map(item => ({
-        COD_ASIGNATURA: item.COD_ASIGNATURA,
-        ASIGNATURA: item.ASIGNATURA,
-        DOCENTE: item.DOCENTE,
-        GRUPO: item.GRUPO,
-        total_evaluaciones_esperadas: item.total_evaluaciones_esperadas,
-        evaluaciones_completadas: item.evaluaciones_completadas,
-        porcentaje_completado: item.porcentaje_completado,
-        estado_evaluacion: item.estado_evaluacion
-      })),
-
-      // Información adicional (opcional)
-      totalDocentes: docentesData.length,
-      resumen: {
-        totalCompletadas: docentesData.reduce((sum, doc) => sum + doc.evaluaciones_completadas, 0),
-        totalEsperadas: docentesData.reduce((sum, doc) => sum + doc.total_evaluaciones_esperadas, 0),
-        promedioCompletado: docentesData.length > 0 
-          ? Math.round((docentesData.reduce((sum, doc) => sum + doc.porcentaje_completado, 0) / docentesData.length) * 100) / 100 
-          : 0
-      }
-    };
-
-    // Establecer los datos en el documento
-    doc.setData(templateData);
-
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+    });
+    
     // Renderizar el documento
-    doc.render();
-
-    // Retornar el buffer del documento generado
-    return doc.getZip().generate({ type: 'nodebuffer' });
-
+    doc.render(datosParaTemplate);
+    
+    const buf = doc.getZip().generate({
+      type: 'nodebuffer',
+      compression: 'DEFLATE',
+    });
+    
+    return buf;
+    
   } catch (error) {
-    console.error('Error en generarInformeDocentes:', error);
-    throw new Error(`Error al generar el documento: ${error.message}`);
+    console.error('Error generando informe:', error);
+    throw error;
   }
 };
 
+const procesarDatosParaTemplate = (datosOriginales) => {
+  // Asegurarse de que datosOriginales sea un array
+  const docentes = Array.isArray(datosOriginales) ? datosOriginales : [datosOriginales];
+  
+  // Procesar cada docente
+  const docentesProcesados = docentes.map(docente => {
+    // Procesar asignaturas
+    const asignaturasP = docente.asignaturas ? docente.asignaturas.map(asignatura => ({
+      ...asignatura,
+      // Procesar grupos con estados dinámicos
+      grupos: asignatura.grupos ? asignatura.grupos.map(grupo => ({
+        ...grupo,
+        estado_grupo: determinarEstado(grupo.porcentaje_completado || 0)
+      })) : []
+    })) : [];
+
+    // Procesar aspectos con formato mejorado
+    const aspectosP = docente.aspectos_evaluacion ? 
+      docente.aspectos_evaluacion.map(aspecto => ({
+        ...aspecto,
+        puntaje_formateado: formatearPuntaje(aspecto.PUNTAJE_PROMEDIO)
+      })) : [];
+
+    return {
+      ...docente,
+      asignaturas: asignaturasP,
+      aspectos_evaluacion: aspectosP,
+      // Determinar si tiene aspectos
+      tiene_aspectos: aspectosP.length > 0
+    };
+  });
+  
+  // Calcular resumen
+  const resumen = calcularResumen(docentesProcesados);
+  
+  return {
+    docentes: docentesProcesados,
+    totalDocentes: docentesProcesados.length,
+    resumen: resumen,
+    fechaGeneracion: new Date().toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  };
+};
+
+const determinarEstado = (porcentaje) => {
+  if (porcentaje === 100) return 'COMPLETADO';
+  if (porcentaje >= 75) return 'AVANZADO';
+  if (porcentaje >= 50) return 'EN PROGRESO';
+  if (porcentaje > 0) return 'INICIADO';
+  return 'PENDIENTE';
+};
+
+const formatearPuntaje = (puntaje) => {
+  if (typeof puntaje === 'number') {
+    return `${(puntaje * 100).toFixed(1)}%`;
+  }
+  return 'N/A';
+};
+
+const calcularResumen = (docentes) => {
+  const totalEsperadas = docentes.reduce((sum, d) => sum + (d.total_evaluaciones_esperadas || 0), 0);
+  const totalCompletadas = docentes.reduce((sum, d) => sum + (d.evaluaciones_completadas || 0), 0);
+  
+  const docentesCompletos = docentes.filter(d => (d.porcentaje_completado || 0) === 100).length;
+  const docentesProgreso = docentes.filter(d => {
+    const porcentaje = d.porcentaje_completado || 0;
+    return porcentaje > 0 && porcentaje < 100;
+  }).length;
+  const docentesPendientes = docentes.filter(d => (d.porcentaje_completado || 0) === 0).length;
+  
+  // Análisis de aspectos
+  const docentesConAspectos = docentes.filter(d => d.aspectos_evaluacion && d.aspectos_evaluacion.length > 0);
+  const totalAspectos = docentesConAspectos.reduce((sum, d) => sum + (d.aspectos_evaluacion?.length || 0), 0);
+  
+  // Aspectos más comunes
+  const aspectosMap = {};
+  docentes.forEach(docente => {
+    if (docente.aspectos_evaluacion && docente.aspectos_evaluacion.length > 0) {
+      docente.aspectos_evaluacion.forEach(aspecto => {
+        const nombreAspecto = aspecto.ASPECTO || aspecto.aspecto || 'Sin nombre';
+        if (aspectosMap[nombreAspecto]) {
+          aspectosMap[nombreAspecto]++;
+        } else {
+          aspectosMap[nombreAspecto] = 1;
+        }
+      });
+    }
+  });
+  
+  const aspectosMasComunes = Object.entries(aspectosMap)
+    .map(([aspecto, count]) => ({ aspecto, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5); // Top 5
+  
+  return {
+    totalEsperadas,
+    totalCompletadas,
+    promedioCompletado: totalEsperadas > 0 ? ((totalCompletadas / totalEsperadas) * 100).toFixed(1) : '0',
+    docentesCompletos,
+    docentesProgreso,
+    docentesPendientes,
+    aspectos: {
+      total_docentes_con_aspectos: docentesConAspectos.length,
+      promedio_aspectos_por_docente: docentesConAspectos.length > 0 
+        ? (totalAspectos / docentesConAspectos.length).toFixed(1) 
+        : '0',
+      aspectos_mas_comunes: aspectosMasComunes
+    }
+  };
+};
+
 module.exports = {
-  generarInformeDocentes,
+  generarInformeDocentes
 };

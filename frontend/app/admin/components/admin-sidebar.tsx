@@ -333,7 +333,15 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: AdminSidebarProp
 
           {/* Botón de cerrar sesión */}
           <button
-            onClick={handleLogout}
+            onClick={() => {
+              setIsLoggingOut(true);
+              
+              // Eliminar el token JWT de localStorage
+              localStorage.removeItem("token");
+
+              // Redirigir o refrescar la app
+              window.location.href = "/login"; // o usa router.push("/login") si usas Next.js
+            }}
             disabled={isLoggingOut}
             className={`w-full group relative flex items-center ${
               isCollapsed && !isMobile ? 'p-3 justify-center' : 'p-3'
@@ -348,7 +356,7 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: AdminSidebarProp
                 isLoggingOut ? 'animate-spin' : ''
               }`} />
             </div>
-            
+
             {/* Contenido del texto */}
             {(!isCollapsed || isMobile) && (
               <>
@@ -360,7 +368,7 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: AdminSidebarProp
                     Salir del sistema
                   </p>
                 </div>
-                
+
                 {/* Chevron indicador */}
                 <ChevronRight className="h-4 w-4 transition-all duration-300 text-red-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1" />
               </>

@@ -91,9 +91,6 @@ const getAspectosPuntajeController = async (req, res, next) => {
     } = req.query;
 
     // Validar parámetros requeridos
-    if (!idDocente) {
-      throw new Error("El parámetro 'idDocente' es requerido");
-    }
 
     if (!idConfiguracion) {
       throw new Error("El parámetro 'idConfiguracion' es requerido");

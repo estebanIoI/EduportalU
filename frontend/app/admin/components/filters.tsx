@@ -264,47 +264,62 @@ export default function Filtros({
     )
   }
 
-  return (
-    <Card className="mb-6">
-      <CardHeader>
-        <CardTitle className="text-gray-900">Filtros</CardTitle>
-        <CardDescription className="text-gray-600">
-          Selecciona la configuración de evaluación y filtra los datos por criterios específicos
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-4">
-          
-          {/* Selector de Configuración */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Configuración *
-            </label>
+return (
+  <Card className="mb-8 shadow-lg border-0 bg-gradient-to-br from-white to-gray-50/50">
+    <CardHeader className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-t-lg">
+      <CardTitle className="text-xl font-bold flex items-center gap-3">
+        <div className="p-2 bg-white/20 rounded-lg">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
+          </svg>
+        </div>
+        Filtros de Evaluación
+      </CardTitle>
+      <CardDescription className="text-blue-100 mt-2">
+        Configura los parámetros de evaluación y personaliza los criterios de filtrado para obtener datos específicos
+      </CardDescription>
+    </CardHeader>
+    
+    <CardContent className="p-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6 mb-6">
+        
+        {/* Selector de Configuración */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+            Configuración
+            <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
             <select
               value={filtros.configuracionSeleccionada || ""}
               onChange={(e) => handleFiltroChange('configuracionSeleccionada', parseInt(e.target.value))}
               disabled={loading}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-gray-300 bg-white shadow-sm"
             >
               <option value="">Selecciona configuración</option>
               {configuraciones.map((config) => (
                 <option key={config.ID} value={config.ID}>
-                  {config.TIPO_EVALUACION_NOMBRE} {config.ACTIVO && "(Activa)"}
+                  {config.TIPO_EVALUACION_NOMBRE} {config.ACTIVO && "✓ (Activa)"}
                 </option>
               ))}
             </select>
           </div>
+        </div>
 
-          {/* Selector de Periodo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Periodo *
-            </label>
+        {/* Selector de Periodo */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+            Periodo
+            <span className="text-red-500">*</span>
+          </label>
+          <div className="relative">
             <select
               value={filtros.periodoSeleccionado}
               onChange={(e) => handleFiltroChange('periodoSeleccionado', e.target.value)}
               disabled={loading}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-gray-300 bg-white shadow-sm"
             >
               <option value="">Selecciona periodo</option>
               {periodos
@@ -319,17 +334,20 @@ export default function Filtros({
                 ))}
             </select>
           </div>
+        </div>
 
-          {/* Selector de Sede */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Sede
-            </label>
+        {/* Selector de Sede */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+            Sede
+          </label>
+          <div className="relative">
             <select
               value={filtros.sedeSeleccionada}
               onChange={(e) => handleFiltroChange('sedeSeleccionada', e.target.value)}
               disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-gray-300 bg-white shadow-sm"
             >
               <option value="">Todas las sedes</option>
               {opcionesFiltros.sedes?.map((sede) => (
@@ -339,20 +357,26 @@ export default function Filtros({
               ))}
             </select>
             {loadingOpciones && (
-              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+              <div className="absolute -bottom-5 left-0 flex items-center gap-2 text-xs text-blue-600 animate-pulse">
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce"></div>
+                Cargando opciones...
+              </div>
             )}
           </div>
+        </div>
 
-          {/* Selector de Programa */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Programa
-            </label>
+        {/* Selector de Programa */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+            Programa
+          </label>
+          <div className="relative">
             <select
               value={filtros.programaSeleccionado}
               onChange={(e) => handleFiltroChange('programaSeleccionado', e.target.value)}
               disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-gray-300 bg-white shadow-sm"
             >
               <option value="">Todos los programas</option>
               {opcionesFiltros.programas?.map((programa) => (
@@ -362,20 +386,26 @@ export default function Filtros({
               ))}
             </select>
             {loadingOpciones && (
-              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+              <div className="absolute -bottom-5 left-0 flex items-center gap-2 text-xs text-blue-600 animate-pulse">
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce"></div>
+                Cargando opciones...
+              </div>
             )}
           </div>
+        </div>
 
-          {/* Selector de Semestre */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Semestre
-            </label>
+        {/* Selector de Semestre */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+            Semestre
+          </label>
+          <div className="relative">
             <select
               value={filtros.semestreSeleccionado}
               onChange={(e) => handleFiltroChange('semestreSeleccionado', e.target.value)}
               disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-gray-300 bg-white shadow-sm"
             >
               <option value="">Todos los semestres</option>
               {opcionesFiltros.semestres?.map((semestre) => (
@@ -385,20 +415,26 @@ export default function Filtros({
               ))}
             </select>
             {loadingOpciones && (
-              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+              <div className="absolute -bottom-5 left-0 flex items-center gap-2 text-xs text-blue-600 animate-pulse">
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce"></div>
+                Cargando opciones...
+              </div>
             )}
           </div>
+        </div>
 
-          {/* Selector de Grupo */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Grupo
-            </label>
+        {/* Selector de Grupo */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+            <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+            Grupo
+          </label>
+          <div className="relative">
             <select
               value={filtros.grupoSeleccionado}
               onChange={(e) => handleFiltroChange('grupoSeleccionado', e.target.value)}
               disabled={loading || loadingOpciones || !filtros.periodoSeleccionado}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full p-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:border-gray-300 bg-white shadow-sm"
             >
               <option value="">Todos los grupos</option>
               {opcionesFiltros.grupos?.map((grupo) => (
@@ -408,90 +444,123 @@ export default function Filtros({
               ))}
             </select>
             {loadingOpciones && (
-              <div className="mt-1 text-xs text-gray-500">Cargando opciones...</div>
+              <div className="absolute -bottom-5 left-0 flex items-center gap-2 text-xs text-blue-600 animate-pulse">
+                <div className="w-3 h-3 bg-blue-600 rounded-full animate-bounce"></div>
+                Cargando opciones...
+              </div>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Botón para mostrar/ocultar información de la configuración */}
-        {configuracionSeleccionada && (
-          <div className="mb-4">
-            <button
-              onClick={() => setMostrarConfiguracion(!mostrarConfiguracion)}
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors duration-200 font-medium text-sm"
-            >
+      {/* Botón para mostrar/ocultar información de la configuración */}
+      {configuracionSeleccionada && (
+        <div className="mb-6">
+          <button
+            onClick={() => setMostrarConfiguracion(!mostrarConfiguracion)}
+            className="group flex items-center gap-3 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 hover:text-blue-800 rounded-xl transition-all duration-200 font-medium text-sm border border-blue-200 hover:border-blue-300 hover:shadow-md"
+          >
+            <div className="p-1 bg-blue-200 group-hover:bg-blue-300 rounded-lg transition-colors duration-200">
               <svg 
-                className={`w-4 h-4 transition-transform duration-200 ${mostrarConfiguracion ? 'rotate-90' : ''}`}
+                className={`w-3 h-3 transition-transform duration-300 ${mostrarConfiguracion ? 'rotate-90' : ''}`}
                 fill="none" 
                 stroke="currentColor" 
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
-              {mostrarConfiguracion ? 'Ocultar' : 'Ver'} información de la configuración
-            </button>
-          </div>
-        )}
+            </div>
+            {mostrarConfiguracion ? 'Ocultar' : 'Ver'} información de la configuración
+            <div className="ml-auto w-2 h-2 bg-blue-400 rounded-full group-hover:scale-110 transition-transform duration-200"></div>
+          </button>
+        </div>
+      )}
 
-        {/* Información de la configuración seleccionada (colapsible) */}
-        {configuracionSeleccionada && mostrarConfiguracion && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 transition-all duration-300 ease-in-out">
-            <div className="space-y-3">
-              <h4 className="text-blue-900 font-semibold text-base mb-3 flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                {configuracionSeleccionada.TIPO_EVALUACION_NOMBRE}
-                <span className={`ml-auto px-2 py-1 rounded-full text-xs font-medium ${
-                  configuracionSeleccionada.ACTIVO 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {configuracionSeleccionada.ACTIVO ? 'Activa' : 'Inactiva'}
-                </span>
-              </h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <span className="text-blue-600">📅</span>
-                  <span className="font-medium">Inicio:</span>
-                  <span>{formatearFecha(configuracionSeleccionada.FECHA_INICIO)}</span>
+      {/* Información de la configuración seleccionada (colapsible) */}
+      {configuracionSeleccionada && mostrarConfiguracion && (
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 border-2 border-blue-200/50 rounded-2xl p-6 mb-6 transition-all duration-500 ease-out transform shadow-lg">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-blue-900 font-bold text-lg flex items-center gap-3">
+                <div className="p-2 bg-blue-200 rounded-xl">
+                  <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
                 </div>
-                
-                <div className="flex items-center gap-2 text-gray-700">
-                  <span className="text-blue-600">🏁</span>
-                  <span className="font-medium">Fin:</span>
-                  <span>{formatearFecha(configuracionSeleccionada.FECHA_FIN)}</span>
+                {configuracionSeleccionada.TIPO_EVALUACION_NOMBRE}
+              </h4>
+              <span className={`px-4 py-2 rounded-full text-sm font-semibold flex items-center gap-2 ${
+                configuracionSeleccionada.ACTIVO 
+                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                  : 'bg-gray-100 text-gray-600 border border-gray-200'
+              }`}>
+                <div className={`w-2 h-2 rounded-full ${
+                  configuracionSeleccionada.ACTIVO ? 'bg-green-500' : 'bg-gray-400'
+                }`}></div>
+                {configuracionSeleccionada.ACTIVO ? 'Activa' : 'Inactiva'}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-blue-100">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="font-semibold text-gray-700 text-sm">Fecha de Inicio</span>
+                  <p className="text-gray-900 font-medium">{formatearFecha(configuracionSeleccionada.FECHA_INICIO)}</p>
                 </div>
               </div>
+              
+              <div className="flex items-center gap-3 p-3 bg-white/60 rounded-xl border border-blue-100">
+                <div className="p-2 bg-red-100 rounded-lg">
+                  <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <span className="font-semibold text-gray-700 text-sm">Fecha de Fin</span>
+                  <p className="text-gray-900 font-medium">{formatearFecha(configuracionSeleccionada.FECHA_FIN)}</p>
+                </div>
+              </div>
+            </div>
 
-              {configuracionSeleccionada.TIPO_EVALUACION_DESCRIPCION && (
-                <div className="mt-3 pt-3 border-t border-blue-200">
-                  <div className="flex items-start gap-2 text-sm text-gray-700">
-                    <span className="text-blue-600 mt-0.5">📝</span>
-                    <div>
-                      <span className="font-medium">Descripción:</span>
-                      <p className="mt-1 text-gray-600 leading-relaxed">
-                        {configuracionSeleccionada.TIPO_EVALUACION_DESCRIPCION}
-                      </p>
-                    </div>
+            {configuracionSeleccionada.TIPO_EVALUACION_DESCRIPCION && (
+              <div className="mt-4 pt-4 border-t border-blue-200/50">
+                <div className="flex items-start gap-3 p-4 bg-white/60 rounded-xl border border-blue-100">
+                  <div className="p-2 bg-purple-100 rounded-lg flex-shrink-0 mt-0.5">
+                    <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <span className="font-semibold text-gray-700 text-sm block mb-2">Descripción</span>
+                    <p className="text-gray-600 leading-relaxed text-sm">
+                      {configuracionSeleccionada.TIPO_EVALUACION_DESCRIPCION}
+                    </p>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        )}
-
-        {/* Botón para limpiar filtros */}
-        <div className="flex justify-end">
-          <Button
-            variant="outline"
-            onClick={onLimpiarFiltros}
-            disabled={loading}
-            className="px-6"
-          >
-            Limpiar Filtros
-          </Button>
         </div>
-      </CardContent>
-    </Card>
-  )
+      )}
+
+      {/* Botón para limpiar filtros */}
+      <div className="flex justify-end pt-4 border-t border-gray-200">
+        <Button
+          variant="outline"
+          onClick={onLimpiarFiltros}
+          disabled={loading}
+          className="px-8 py-2.5 border-2 border-gray-300 hover:border-red-400 hover:bg-red-50 hover:text-red-700 transition-all duration-200 rounded-xl font-medium flex items-center gap-2 shadow-sm hover:shadow-md"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+          Limpiar Filtros
+        </Button>
+      </div>
+    </CardContent>
+  </Card>
+)
 }
