@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -p $PORT",
+    "start": "next start -p ${PORT:-3000}",
     "lint": "next lint",
-    "heroku-postbuild": "npm run build"
+    "docker:build": "docker build -t frontend .",
+    "docker:run": "docker run -p 3000:3000 frontend"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -46,13 +46,40 @@ class ApiClient {
 
   // Método privado para manejar errores
   private handleError(error: AxiosError<ApiError>): never {
-    const errorMessage = error.response?.data?.message || 'Error de conexión';
+    // Solo log detallado en desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      console.error('API Client Error:', error);
+      console.error('Response data:', error.response?.data);
+    }
+    console.error('Response status:', error.response?.status);
+    
+    let errorTitle = "Error";
+    let errorMessage = 'Error de conexión';
+    
+    if (error.response) {
+      // Error de respuesta del servidor
+      if (error.response.status === 401 || error.response.status === 403) {
+        errorTitle = "Error de autenticación";
+        errorMessage = error.response?.data?.message || 'Tu sesión ha expirado o no tienes permisos suficientes';
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+    } else if (error.request) {
+      // No se recibió respuesta del servidor
+      errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+    }
+    
     toast({
-      title: "Error",
+      title: errorTitle,
       description: errorMessage,
       variant: "destructive"
     });
-    throw error;
+    
+    throw {
+      ...error.response?.data,
+      message: errorMessage,
+      status: error.response?.status
+    };
   }
 
   // Método específico para requests con paginación

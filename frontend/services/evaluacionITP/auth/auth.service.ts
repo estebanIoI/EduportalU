@@ -51,7 +51,16 @@ class AuthService {
   }
 
   async getProfile(): Promise<ApiResponse<PerfilUsuario>> {
+    // Verificar autenticación
+    const token = this.getToken();
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Token disponible en getProfile:', !!token);
+    }
+    
     if (!this.isAuthenticated()) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Usuario no autenticado en getProfile');
+      }
       const authError: ApiError = {
         success: false,
         message: 'Sesión expirada. Por favor, inicie sesión nuevamente.',
@@ -61,8 +70,23 @@ class AuthService {
     }
 
     try {
+      // Configurar headers explícitamente con el token
+      const config = {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      };
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Solicitando perfil con config:', config);
+      }
+      
       // Usar getSilent para evitar mostrar mensaje de éxito en cada consulta de perfil
-      const response = await apiClient.getSilent<PerfilUsuario>('/auth/profile');
+      const response = await apiClient.getSilent<PerfilUsuario>('/auth/profile', config);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Respuesta de perfil:', response);
+      }
 
       // Discriminar por tipo de usuario
       if (response.success && response.data) {
@@ -70,7 +94,9 @@ class AuthService {
 
         switch (perfil.tipo) {
           case "estudiante":
-            console.log("Perfil Estudiante cargado:", perfil);
+            if (process.env.NODE_ENV === 'development') {
+              console.log("Perfil Estudiante cargado:", perfil);
+            }
             // Aquí puedes disparar eventos específicos para estudiantes
             window.dispatchEvent(new CustomEvent('auth:student-profile-loaded', { 
               detail: perfil 

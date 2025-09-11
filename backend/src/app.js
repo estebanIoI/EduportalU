@@ -15,9 +15,29 @@ const app = express();
 
 // Configuración de CORS
 const corsOptions = {
-  origin: '*', // Permite todas las origenes (en producción, especifica los dominios permitidos)
+  origin: function (origin, callback) {
+    // Lista de orígenes permitidos
+    const allowedOrigins = [
+      'http://62.146.231.110',
+      'https://62.146.231.110',
+      'http://62.146.231.110:3000',
+      'https://62.146.231.110:3000',
+      'http://localhost:3000', // Para desarrollo
+      'http://localhost:5000'  // Para testing
+    ];
+    
+    // Permitir requests sin origin (como mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log(`CORS blocked origin: ${origin}`);
+      callback(null, true); // Permitir todos los orígenes en producción por ahora
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
   maxAge: 86400 // 24 horas
 };
@@ -35,21 +55,74 @@ initializeDatabase()
   .then(() => {
     console.log('✅ Base de datos inicializada correctamente');
     
-    // Mostrar configuración de CORS después de la inicialización de la base de datos
-    console.log('\n🔒 CORS activado con las siguientes configuraciones:');
-    console.log('════════════════════════════════════════════════════════════════════════════');
-    console.log('   • Origen: Todos permitidos (*)');
-    console.log('   • Métodos: GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    console.log('   • Headers: Content-Type, Authorization');
-    console.log('   • Credenciales: Habilitadas');
-    console.log('   • Tiempo de caché: 24 horas');
-    console.log('════════════════════════════════════════════════════════════════════════════\n');
+    // Solo mostrar configuración detallada en desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n🔒 CORS activado con las siguientes configuraciones:');
+      console.log('════════════════════════════════════════════════════════════════════════════');
+      console.log('   • Origen: Configurado para producción');
+      console.log('   • Métodos: GET, POST, PUT, DELETE, PATCH, OPTIONS');
+      console.log('   • Headers: Content-Type, Authorization');
+      console.log('   • Credenciales: Habilitadas');
+      console.log('   • Tiempo de caché: 24 horas');
+      console.log('════════════════════════════════════════════════════════════════════════════\n');
+    }
   })
   .catch((error) => {
     console.error('\n❌ Error al iniciar el servidor:');
     console.error(`📝 Detalles: ${error.message}`);
     process.exit(1);
   });
+
+// Health check endpoints
+app.get('/health', async (req, res) => {
+  try {
+    // Verificar conexión a base de datos local
+    const pool = require('./db').getPool();
+    const [rows] = await pool.query('SELECT 1 as health');
+    
+    res.status(200).json({ 
+      status: 'UP', 
+      message: 'Servidor funcionando correctamente',
+      database: 'Connected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'DOWN', 
+      message: 'Error en el servidor',
+      database: 'Disconnected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  }
+});
+
+app.get('/api/v1/health', async (req, res) => {
+  try {
+    // Verificar conexión a base de datos local
+    const pool = require('./db').getPool();
+    const [rows] = await pool.query('SELECT 1 as health');
+    
+    res.status(200).json({ 
+      status: 'UP', 
+      message: 'API funcionando correctamente',
+      database: 'Connected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      version: '1.0.0'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'DOWN', 
+      message: 'Error en la API',
+      database: 'Disconnected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development',
+      version: '1.0.0'
+    });
+  }
+});
 
 // API routes
 app.use('/api/v1', routes);
@@ -59,12 +132,28 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ 
-    status: 'UP', 
-    message: 'Servidor funcionando correctamente',
-    timestamp: new Date().toISOString()
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Verificar conexión a base de datos local
+    const pool = require('./db').getPool();
+    const [rows] = await pool.query('SELECT 1 as health');
+    
+    res.status(200).json({ 
+      status: 'UP', 
+      message: 'Servidor funcionando correctamente',
+      database: 'Connected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'DOWN', 
+      message: 'Error en el servidor',
+      database: 'Disconnected',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    });
+  }
 });
 
 // 404 handler

@@ -41,27 +41,47 @@ export default function EstudianteBienvenida() {
   useEffect(() => {
     const cargarPerfil = async () => {
       try {
-        const response = await authService.getProfile()
-        if (response.success && response.data.tipo === "estudiante") {
-          const perfilData = response.data as PerfilEstudiante
-          setPerfil(perfilData)
+        console.log('Verificando autenticación en bienvenida...');
+        const isAuth = authService.isAuthenticated();
+        console.log('¿Usuario autenticado?', isAuth);
+        
+        // Verificar token explícitamente
+        const token = authService.getToken();
+        console.log('Token disponible:', !!token);
+        
+        const response = await authService.getProfile();
+        console.log('Perfil obtenido:', response);
+        
+        if (response.success && response.data && response.data.tipo === "estudiante") {
+          const perfilData = response.data as PerfilEstudiante;
+          setPerfil(perfilData);
         } else {
+          console.log('Respuesta de perfil no válida:', response);
           toast({
-            title: "Error",
-            description: "No se pudo cargar el perfil del estudiante",
+            title: "Error de perfil",
+            description: "No se pudo verificar el perfil de estudiante",
             variant: "destructive",
-          })
+          });
         }
-      } catch (error) {
+      } catch (error: any) {
+        console.error('Error al cargar perfil:', error);
+        const errorMessage = error?.message || "No se pudo cargar el perfil del estudiante";
+        
         toast({
-          title: "Error",
-          description: "No se pudo cargar el perfil del estudiante",
+          title: "Error de autenticación",
+          description: errorMessage,
           variant: "destructive",
-        })
+        });
+        
+        // Si hay un error de autenticación, redirigir al login
+        if (error?.error === 'UNAUTHENTICATED') {
+          // Redirección al login
+          window.location.href = '/login';
+        }
       }
-    }
+    };
 
-    cargarPerfil()
+    cargarPerfil();
   }, [toast])
 
   useEffect(() => {

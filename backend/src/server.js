@@ -11,8 +11,15 @@ const printStartupMessages = () => {
   console.log('\n🚀 Sistema de Evaluación Docente - Backend');
   console.log('════════════════════════════════════════════════════════════════════════════');
   console.log(`📡 Puerto: ${PORT}`);
-  console.log(`🌐 API: http://localhost:${PORT}/api/v1`);
-  console.log(`📚 Swagger: http://localhost:${PORT}/api-docs`);
+  
+  if (process.env.NODE_ENV === 'production') {
+    console.log(`🌐 API: http://62.146.231.110/api/v1`);
+    console.log(`📚 Swagger: http://62.146.231.110/api-docs`);
+  } else {
+    console.log(`🌐 API: http://localhost:${PORT}/api/v1`);
+    console.log(`📚 Swagger: http://localhost:${PORT}/api-docs`);
+  }
+  
   console.log(`⚙️  Modo: ${process.env.NODE_ENV || 'development'}`);
   console.log('════════════════════════════════════════════════════════════════════════════');
   console.log('💡 Para detener el servidor, presiona Ctrl+C\n');

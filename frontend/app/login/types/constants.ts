@@ -12,7 +12,7 @@ export const MEDIA_CONFIG = {
 } as const;
 
 export const LOGOS = {
-  main: "https://scontent-bog2-1.xx.fbcdn.net/v/t39.30808-6/518273401_1335532245246623_8297795156351999546_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=xxbJwz7DBVIQ7kNvwEvRtXW&_nc_oc=AdnVMwM43kaytMIqOIeCNOPg5v6Q9f4IOFmoVsborGhn-HVKx64e4RHLx1BLQ5GcMUh5Eu8wdbwj3Ois9k-BFtha&_nc_zt=23&_nc_ht=scontent-bog2-1.xx&_nc_gid=93Kq8rrMhsVFtORx1DjM0A&oh=00_AfR26ypDFzH2HtQUdJ996tdSRf3fMZ53Z5OSRlbUbQ5GUw&oe=68930BFD",
+  main: "https://scontent-bog2-1.xx.fbcdn.net/v/t39.30808-6/518273401_1335532245246623_8297795156351999546_n.jpg?_nc_cat=101&ccb=1-7&_nc_sid=6ee11a&_nc_ohc=thA383x1ebAQ7kNvwFO-RKo&_nc_oc=Adkvr0mqcj6DqyGIkhDRgZzALA1dAByxD1BNXDRlei1SlTvuqNQGLfVKjGaTMYetReD0FrZsOw9pHJttf8hi1rDe&_nc_zt=23&_nc_ht=scontent-bog2-1.xx&_nc_gid=Ga7BgXMMWV-VCo5Wyz-69Q&oh=00_AfYJoot6OLXmPt55y5cR-uS1O5E8pZaKqv2Tsjg4SWM7hQ&oe=68C0173D",
 } as const;
 
 export const KNOWN_SHORTS = [
