@@ -8,9 +8,13 @@ region: nyc
 # ============================================
 services:
   - name: backend
+    github:
+      repo: estebanIoI/EduportalU
+      branch: main
+      deploy_on_push: true
     # Usar el Dockerfile existente
-    dockerfile_path: backend/Dockerfile
-    source_dir: backend
+    dockerfile_path: Dockerfile
+    source_dir: /backend
     
     # Configuración HTTP
     http_port: 5000
@@ -53,9 +57,13 @@ services:
 # SITIO ESTÁTICO / FRONTEND (Next.js)
 # ============================================
   - name: frontend
+    github:
+      repo: estebanIoI/EduportalU
+      branch: main
+      deploy_on_push: true
     # Usar el Dockerfile existente
-    dockerfile_path: frontend/Dockerfile
-    source_dir: frontend
+    dockerfile_path: Dockerfile
+    source_dir: /frontend
     
     # Configuración HTTP
     http_port: 3000
