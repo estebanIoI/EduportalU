@@ -11,9 +11,11 @@ import {
   aspectosEvaluacionService,
   escalasValoracionService,
   configuracionAspectoService,
-  configuracionValoracionService
+  configuracionValoracionService,
+  preguntasService,
+  configuracionPreguntaService
 } from "@/services";
-import { TipoEvaluacion, AspectoEvaluacion, EscalaValoracion, ConfiguracionEvaluacion } from "@/lib/types/evaluacionInsitu";
+import { TipoEvaluacion, AspectoEvaluacion, EscalaValoracion, ConfiguracionEvaluacion, Pregunta } from "@/lib/types/evaluacionInsitu";
 import { ModalTipoEvaluacion } from "./components/ModalTipoEvaluacion";
 import { ModalAspecto } from "./components/ModalAspecto";
 import { ModalEscala } from "./components/ModalEscala";
@@ -21,6 +23,8 @@ import { ModalConfirmacion } from "./components/ModalConfirmacion";
 import { ModalConfiguracionEvaluacion } from "./components/ModalConfiguracionEvaluacion";
 import { ModalConfiguracionAspecto } from "./components/ModalConfiguracionAspecto";
 import { ModalConfiguracionValoracion } from "./components/ModalConfiguracionValoracion";
+import { ModalPregunta } from "./components/ModalPregunta";
+import { ModalConfiguracionPregunta } from "./components/ModalConfiguracionPregunta";
 
 // Importar las vistas separadas
 import { TiposEvaluacionView } from "./components/views/TipoEvaluacionView";
@@ -28,6 +32,7 @@ import { ConfiguracionView } from "./components/views/ConfiguracionView";
 import { AspectosView } from "./components/views/AspectosView";
 import { EscalasView } from "./components/views/EscalasView";
 import { EvaluacionView } from "./components/views/EvaluacionView";
+import { PreguntasView } from "./components/views/PreguntasView";
 
 export default function FormularioPage() {
   const { toast } = useToast();
@@ -35,6 +40,7 @@ export default function FormularioPage() {
   const [tiposEvaluacion, setTiposEvaluacion] = useState<TipoEvaluacion[]>([]);
   const [aspectos, setAspectos] = useState<AspectoEvaluacion[]>([]);
   const [escalas, setEscalas] = useState<EscalaValoracion[]>([]);
+  const [preguntas, setPreguntas] = useState<Pregunta[]>([]);
   const [configuraciones, setConfiguraciones] = useState<ConfiguracionEvaluacion[]>([]);
   const [modalConfiguracion, setModalConfiguracion] = useState({
     isOpen: false,
@@ -55,6 +61,10 @@ export default function FormularioPage() {
     isOpen: false,
     escala: undefined as EscalaValoracion | undefined,
   });
+  const [modalPregunta, setModalPregunta] = useState({
+    isOpen: false,
+    pregunta: undefined as Pregunta | undefined,
+  });
   const [modalConfirmacion, setModalConfirmacion] = useState({
     isOpen: false,
     title: "",
@@ -65,11 +75,16 @@ export default function FormularioPage() {
   const [configuracionSeleccionada, setConfiguracionSeleccionada] = useState<number | null>(null);
   const [configuracionAspectos, setConfiguracionAspectos] = useState<any[]>([]);
   const [configuracionValoraciones, setConfiguracionValoraciones] = useState<any[]>([]);
+  const [configuracionPreguntas, setConfiguracionPreguntas] = useState<any[]>([]);
   const [modalConfiguracionAspecto, setModalConfiguracionAspecto] = useState({
     isOpen: false,
     configuracion: undefined as any | undefined,
   });
   const [modalConfiguracionValoracion, setModalConfiguracionValoracion] = useState({
+    isOpen: false,
+    configuracion: undefined as any | undefined,
+  });
+  const [modalConfiguracionPregunta, setModalConfiguracionPregunta] = useState({
     isOpen: false,
     configuracion: undefined as any | undefined,
   });
@@ -84,10 +99,11 @@ export default function FormularioPage() {
 
   const cargarDatosIniciales = async () => {
     try {
-      const [tiposResponse, aspectosResponse, escalasResponse, configuracionesResponse] = await Promise.all([
+      const [tiposResponse, aspectosResponse, escalasResponse, preguntasResponse, configuracionesResponse] = await Promise.all([
         tiposEvaluacionService.getAll(),
         aspectosEvaluacionService.getAll(),
         escalasValoracionService.getAll(),
+        preguntasService.getAll(),
         configuracionEvaluacionService.getAll(),
       ]);
       
@@ -95,6 +111,7 @@ export default function FormularioPage() {
       setTiposEvaluacion(tiposResponse.data || []);
       setAspectos(aspectosResponse.data || []);
       setEscalas(escalasResponse.data || []);
+      setPreguntas(preguntasResponse.data || []);
       setConfiguraciones(configuracionesResponse.data || []);
     } catch (error) {
       toast({
@@ -107,13 +124,17 @@ export default function FormularioPage() {
 
   const cargarDatosFiltrados = async (configuracionId: number) => {
     try {
-      const response = await tiposEvaluacionService.getConfiguracion(configuracionId);
+      const [responseConfig, responsePreguntas] = await Promise.all([
+        tiposEvaluacionService.getConfiguracion(configuracionId),
+        configuracionPreguntaService.getByConfiguracionId(configuracionId)
+      ]);
       
       // Extraer los datos de la respuesta de la API
-      const { configuracion, aspectos, valoraciones } = response.data || {};
+      const { configuracion, aspectos, valoraciones } = responseConfig.data || {};
 
       setConfiguracionAspectos(aspectos || []);
       setConfiguracionValoraciones(valoraciones || []);
+      setConfiguracionPreguntas(responsePreguntas.data || []);
 
       toast({
         title: "Éxito",
@@ -165,6 +186,18 @@ export default function FormularioPage() {
     });
   };
 
+  const handleEliminarPregunta = async (pregunta: Pregunta) => {
+    setModalConfirmacion({
+      isOpen: true,
+      title: "Eliminar Pregunta",
+      description: `¿Está seguro de eliminar la pregunta "${pregunta.TEXTO}"?`,
+      onConfirm: async () => {
+        await preguntasService.delete(pregunta.ID);
+        await cargarDatosIniciales();
+      },
+    });
+  };
+
   const handleEliminarConfiguracion = async (configuracion: ConfiguracionEvaluacion) => {
     setModalConfirmacion({
       isOpen: true,
@@ -197,6 +230,20 @@ export default function FormularioPage() {
       onConfirm: async () => {
         await configuracionValoracionService.delete(configuracion.ID);
         await cargarDatosIniciales();
+      },
+    });
+  };
+
+  const handleEliminarConfiguracionPregunta = async (configuracion: ConfiguracionEvaluacion) => {
+    setModalConfirmacion({
+      isOpen: true,
+      title: "Eliminar Configuración de Pregunta",
+      description: `¿Está seguro de eliminar esta configuración de pregunta?`,
+      onConfirm: async () => {
+        await configuracionPreguntaService.delete(configuracion.ID);
+        if (configuracionSeleccionada) {
+          await cargarDatosFiltrados(configuracionSeleccionada);
+        }
       },
     });
   };
@@ -246,6 +293,12 @@ export default function FormularioPage() {
             Escalas de Valoración
           </Button>
           <Button
+            variant={activeTab === "preguntas" ? "default" : "outline"}
+            onClick={() => setActiveTab("preguntas")}
+          >
+            Preguntas
+          </Button>
+          <Button
             variant={activeTab === "evaluacion" ? "default" : "outline"}
             onClick={() => setActiveTab("evaluacion")}
           >
@@ -288,6 +341,14 @@ export default function FormularioPage() {
           />
         )}
 
+        {activeTab === "preguntas" && (
+          <PreguntasView
+            preguntas={preguntas}
+            setModalPregunta={setModalPregunta}
+            handleEliminarPregunta={handleEliminarPregunta}
+          />
+        )}
+
         {activeTab === "evaluacion" && (
           <EvaluacionView
             configuracionSeleccionada={configuracionSeleccionada}
@@ -297,10 +358,13 @@ export default function FormularioPage() {
             cargarDatosFiltrados={cargarDatosFiltrados}
             setModalConfiguracionAspecto={setModalConfiguracionAspecto}
             setModalConfiguracionValoracion={setModalConfiguracionValoracion}
+            setModalConfiguracionPregunta={setModalConfiguracionPregunta}
             configuracionAspectos={configuracionAspectos}
             configuracionValoraciones={configuracionValoraciones}
+            configuracionPreguntas={configuracionPreguntas}
             handleEliminarConfiguracionAspecto={handleEliminarConfiguracionAspecto}
             handleEliminarConfiguracionValoracion={handleEliminarConfiguracionValoracion}
+            handleEliminarConfiguracionPregunta={handleEliminarConfiguracionPregunta}
             refreshAspectos={cargarDatosIniciales}
           />
         )}
@@ -325,6 +389,13 @@ export default function FormularioPage() {
           isOpen={modalEscala.isOpen}
           onClose={() => setModalEscala({ isOpen: false, escala: undefined })}
           escala={modalEscala.escala}
+          onSuccess={cargarDatosIniciales}
+        />
+
+        <ModalPregunta
+          isOpen={modalPregunta.isOpen}
+          onClose={() => setModalPregunta({ isOpen: false, pregunta: undefined })}
+          pregunta={modalPregunta.pregunta}
           onSuccess={cargarDatosIniciales}
         />
 
@@ -355,6 +426,14 @@ export default function FormularioPage() {
           isOpen={modalConfiguracionValoracion.isOpen}
           onClose={() => setModalConfiguracionValoracion({ isOpen: false, configuracion: undefined })}
           configuracion={modalConfiguracionValoracion.configuracion}
+          configuracionEvaluacionId={configuracionSeleccionada!}
+          onSuccess={() => cargarDatosFiltrados(configuracionSeleccionada!)}
+        />
+
+        <ModalConfiguracionPregunta
+          isOpen={modalConfiguracionPregunta.isOpen}
+          onClose={() => setModalConfiguracionPregunta({ isOpen: false, configuracion: undefined })}
+          configuracion={modalConfiguracionPregunta.configuracion}
           configuracionEvaluacionId={configuracionSeleccionada!}
           onSuccess={() => cargarDatosFiltrados(configuracionSeleccionada!)}
         />

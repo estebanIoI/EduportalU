@@ -31,8 +31,12 @@ import {
   DashboardRankingResponse,
   DashboardPodioResponse,
   DashboardParams,
+  EstadisticaProgramaResponse,
+  EstudianteEvaluacionResponse,
+  DocenteProgramaResponse,
 } from "@/lib/types/dashboard/dashboard";
 import Filtros from "@/app/admin/components/filters";
+import EstadisticasPrograma, { EstudianteEvaluacion, DocentePrograma, AspectoDocente } from "@/app/admin/components/estadisticas-programa";
 import apiClient from "@/lib/api";
 
 interface DashboardData {
@@ -40,6 +44,7 @@ interface DashboardData {
   aspectos: DashboardAspectosResponse[];
   ranking: DashboardRankingResponse[];
   podio: DashboardPodioResponse[];
+  estadisticasProgramas: EstadisticaProgramaResponse[];
 }
 
 interface FiltrosState {
@@ -155,11 +160,13 @@ export default function AdminDashboard() {
           aspectosResponse,
           rankingResponse,
           podioResponse,
+          estadisticasProgramasResponse,
         ] = await Promise.all([
           dashboardService.getStats(params),
           dashboardService.getAspectos(params),
           dashboardService.getRanking(params),
           dashboardService.getPodio(params),
+          dashboardService.getEstadisticasPorPrograma(params),
         ]);
 
         const statsData = extractData<DashboardStatsResponse>(statsResponse);
@@ -168,12 +175,20 @@ export default function AdminDashboard() {
         const rankingData =
           extractData<DashboardRankingResponse[]>(rankingResponse);
         const podioData = extractData<DashboardPodioResponse[]>(podioResponse);
+        const estadisticasProgramasData = 
+          extractData<EstadisticaProgramaResponse[]>(estadisticasProgramasResponse);
+
+        const rankingArray = Array.isArray(rankingData) ? rankingData : [];
+        const estadisticasProgramas = Array.isArray(estadisticasProgramasData) 
+          ? estadisticasProgramasData 
+          : [];
 
         setDashboardData({
           stats: statsData,
           aspectos: Array.isArray(aspectosData) ? aspectosData : [],
-          ranking: Array.isArray(rankingData) ? rankingData : [],
+          ranking: rankingArray,
           podio: Array.isArray(podioData) ? podioData : [],
+          estadisticasProgramas,
         });
       } catch (error) {
         console.error("Error al cargar el dashboard:", error);
@@ -205,6 +220,102 @@ export default function AdminDashboard() {
     });
   };
 
+  // Handler para clic en barras del gráfico de estadísticas por programa
+  const handleEstadisticasProgramaClick = (
+    programa: string,
+    tipo: "completadas" | "pendientes"
+  ) => {
+    console.log(`Clic en ${programa} - ${tipo}`);
+    // Aquí puedes agregar lógica adicional como navegar a una vista de detalle
+  };
+
+  // Handler para obtener estudiantes de un programa
+  const handleObtenerEstudiantesPrograma = async (
+    programa: string,
+    tipo: "completadas" | "pendientes"
+  ): Promise<EstudianteEvaluacion[]> => {
+    if (!filtros.configuracionSeleccionada) {
+      return [];
+    }
+
+    try {
+      const params: DashboardParams & { nomPrograma: string; estado: "completadas" | "pendientes" } = {
+        idConfiguracion: filtros.configuracionSeleccionada,
+        nomPrograma: programa,
+        estado: tipo,
+        ...(filtros.semestreSeleccionado && { semestre: filtros.semestreSeleccionado }),
+        ...(filtros.periodoSeleccionado && { periodo: filtros.periodoSeleccionado }),
+        ...(filtros.grupoSeleccionado && { grupo: filtros.grupoSeleccionado }),
+        ...(filtros.sedeSeleccionada && { nombreSede: filtros.sedeSeleccionada }),
+      };
+
+      const response = await dashboardService.getEstudiantesPorPrograma(params);
+      const data = extractData<EstudianteEvaluacionResponse[]>(response);
+      
+      // Mapear la respuesta al tipo esperado por el componente
+      return (data || []).map((est): EstudianteEvaluacion => ({
+        id: est.id,
+        nombre: est.nombre,
+        codigo: est.codigo,
+        estado: est.estado,
+        fechaCompletado: est.fechaCompletado || undefined,
+      }));
+    } catch (error) {
+      console.error("Error al obtener estudiantes:", error);
+      return [];
+    }
+  };
+
+  // Handler para obtener docentes de un programa
+  const handleObtenerDocentesPrograma = async (
+    programa: string
+  ): Promise<DocentePrograma[]> => {
+    if (!filtros.configuracionSeleccionada) {
+      return [];
+    }
+
+    try {
+      const params: DashboardParams & { nomPrograma: string } = {
+        idConfiguracion: filtros.configuracionSeleccionada,
+        nomPrograma: programa,
+        ...(filtros.semestreSeleccionado && { semestre: filtros.semestreSeleccionado }),
+        ...(filtros.periodoSeleccionado && { periodo: filtros.periodoSeleccionado }),
+        ...(filtros.grupoSeleccionado && { grupo: filtros.grupoSeleccionado }),
+        ...(filtros.sedeSeleccionada && { nombreSede: filtros.sedeSeleccionada }),
+      };
+
+      const response = await dashboardService.getDocentesPorPrograma(params);
+      const data = extractData<DocenteProgramaResponse[]>(response);
+      
+      // Mapear la respuesta al tipo esperado por el componente
+      return (data || []).map((doc): DocentePrograma => ({
+        id: doc.id,
+        nombre: doc.nombre,
+        promedio: doc.promedio,
+        estado: doc.estado,
+        evaluacionesRealizadas: doc.evaluacionesRealizadas,
+        evaluacionesEsperadas: doc.evaluacionesEsperadas,
+        porcentajeEvaluado: doc.porcentajeEvaluado,
+        totalEstudiantes: doc.totalEstudiantes,
+        totalAsignaturas: doc.totalAsignaturas,
+        posicion: doc.posicion,
+        aspectos: doc.aspectos?.map(a => ({
+          aspecto: a.aspecto,
+          descripcion: a.descripcion,
+          promedio: a.promedio
+        })),
+        aspectosAMejorar: doc.aspectosAMejorar?.map(a => ({
+          aspecto: a.aspecto,
+          descripcion: a.descripcion,
+          promedio: a.promedio
+        })),
+      }));
+    } catch (error) {
+      console.error("Error al obtener docentes:", error);
+      return [];
+    }
+  };
+
   if (loading && !dashboardData) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -231,6 +342,7 @@ export default function AdminDashboard() {
   const aspectos = dashboardData?.aspectos || [];
   const ranking = dashboardData?.ranking || [];
   const podio = dashboardData?.podio || [];
+  const estadisticasProgramas = dashboardData?.estadisticasProgramas || [];
 
   // Usar ranking para el listado completo ordenado por promedio
   const docentesOrdenados = [...ranking].sort((a, b) => {
@@ -452,6 +564,17 @@ export default function AdminDashboard() {
                   </div>
                 </CardContent>
               </Card>
+            </div>
+
+            {/* Estadísticas por Programa */}
+            <div className="mb-10">
+              <EstadisticasPrograma
+                datos={estadisticasProgramas.length > 0 ? estadisticasProgramas : undefined}
+                onBarClick={handleEstadisticasProgramaClick}
+                onObtenerEstudiantes={handleObtenerEstudiantesPrograma}
+                onObtenerDocentes={handleObtenerDocentesPrograma}
+                loading={loading}
+              />
             </div>
 
             {/* Ranking y Mejores/Peores */}

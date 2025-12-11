@@ -2,12 +2,15 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { authService } from "@/services/evaluacionITP/auth/auth.service"
+import { PerfilEstudiante } from "@/lib/types/auth"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +23,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Switch } from "@/components/ui/switch"
 import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import { 
   User, 
   LogOut, 
@@ -38,7 +42,11 @@ import {
   Mail,
   Award,
   TrendingUp,
-  ChevronRight
+  ChevronRight,
+  Building2,
+  FileText,
+  Loader2,
+  ArrowLeft
 } from "lucide-react"
 
 interface User {
@@ -68,6 +76,16 @@ export function Header({
   const [currentTime, setCurrentTime] = useState(new Date())
   const [isDropdownOpen, setIsDropdownOpen] = useState(false)
   const [isHoveringLogo, setIsHoveringLogo] = useState(false)
+  const [perfilAcademico, setPerfilAcademico] = useState<PerfilEstudiante | null>(null)
+  const [loadingPerfil, setLoadingPerfil] = useState(false)
+  
+  const pathname = usePathname()
+  const router = useRouter()
+  
+  // Detectar si estamos en una página de evaluación (incluye dashboard con ID, evaluacion y evaluar)
+  const isInEvaluacion = pathname?.includes('/estudiante/evaluacion/') || 
+                         pathname?.includes('/estudiante/evaluar/') ||
+                         (pathname?.includes('/estudiante/dashboard/') && pathname !== '/estudiante/dashboard')
 
   // Cargar perfil del usuario desde localStorage
   useEffect(() => {
@@ -85,6 +103,27 @@ export function Header({
 
     loadUserProfile()
   }, [])
+
+  // Cargar perfil académico del estudiante desde el backend
+  useEffect(() => {
+    const cargarPerfilAcademico = async () => {
+      try {
+        setLoadingPerfil(true)
+        const response = await authService.getProfile()
+        if (response.success && response.data && response.data.tipo === "estudiante") {
+          setPerfilAcademico(response.data as PerfilEstudiante)
+        }
+      } catch (error) {
+        console.error('Error cargando perfil académico:', error)
+      } finally {
+        setLoadingPerfil(false)
+      }
+    }
+
+    if (user) {
+      cargarPerfilAcademico()
+    }
+  }, [user])
 
   // Actualizar hora cada minuto
   useEffect(() => {
@@ -249,8 +288,21 @@ export function Header({
       }`}>
         <div className="relative container mx-auto flex h-18 md:h-22 items-center justify-between px-4 sm:px-6">
           
-          {/* Logo */}
+          {/* Logo y botón volver */}
           <div className="flex items-center gap-4">
+            {/* Botón volver atrás - visible solo en evaluación */}
+            {isInEvaluacion && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.back()}
+                className="h-10 w-10 md:h-12 md:w-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 hover:from-blue-100 hover:to-blue-200 dark:hover:from-blue-900/40 dark:hover:to-blue-800/40 border border-gray-200 dark:border-gray-600 shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105 group"
+                title="Volver atrás"
+              >
+                <ArrowLeft className="h-5 w-5 md:h-6 md:w-6 text-gray-600 dark:text-gray-300 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors duration-300" />
+              </Button>
+            )}
+            
             <Link 
               href="/" 
               className="flex items-center gap-3 group"
@@ -443,9 +495,20 @@ export function Header({
                     <div className="bg-blue-100 dark:bg-blue-900/40 p-2 rounded-lg">
                       <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-gray-900 dark:text-gray-100">Mi Perfil</p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Ver información detallada</p>
+                      {loadingPerfil ? (
+                        <div className="flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin text-gray-400" />
+                          <span className="text-xs text-gray-400">Cargando...</span>
+                        </div>
+                      ) : perfilAcademico ? (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                          {perfilAcademico.programa} • Sem. {perfilAcademico.semestre}
+                        </p>
+                      ) : (
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Ver información detallada</p>
+                      )}
                     </div>
                     <ChevronRight className="ml-auto h-4 w-4 text-gray-400" />
                   </DropdownMenuItem>
@@ -482,77 +545,183 @@ export function Header({
 
       {/* Modal de perfil */}
       <Dialog open={showProfileModal} onOpenChange={setShowProfileModal}>
-        <DialogContent className="sm:max-w-[600px] bg-white dark:bg-gray-900 rounded-2xl overflow-hidden">
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto bg-white dark:bg-gray-900 rounded-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-black bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               Perfil del Estudiante
             </DialogTitle>
           </DialogHeader>
-          <div className="grid gap-6 py-4">
-            <div className="flex items-center gap-6">
-              <Avatar className="h-20 w-20">
-                <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-800 text-white font-bold text-xl">
-                  {getInitials(capitalizedName)}
-                </AvatarFallback>
-              </Avatar>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{capitalizedName}</h3>
-                <p className="text-gray-500 dark:text-gray-400">Semestre</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                    Semestre
-                  </Badge>
-                  <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
-                    Promedio: 4.2
-                  </Badge>
+          
+          {loadingPerfil ? (
+            <div className="grid gap-6 py-4">
+              <div className="flex items-center gap-6">
+                <Skeleton className="h-20 w-20 rounded-full" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-6 w-24" />
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg">
-                  <MapPin className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Dirección</p>
-                  <p className="font-medium text-gray-900 dark:text-white">Mocoa, Putumayo</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded-lg">
-                  <Phone className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Teléfono</p>
-                  <p className="font-medium text-gray-900 dark:text-white">+57 311 234 5678</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="bg-green-100 dark:bg-green-900/30 p-2 rounded-lg">
-                  <Mail className="h-5 w-5 text-green-600 dark:text-green-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Correo</p>
-                  <p className="font-medium text-gray-900 dark:text-white">estudiante@eduportal.com</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="bg-orange-100 dark:bg-orange-900/30 p-2 rounded-lg">
-                  <Clock className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Último acceso</p>
-                  <p className="font-medium text-gray-900 dark:text-white">
-                    {new Date().toLocaleDateString('es-ES', { 
-                      day: '2-digit', 
-                      month: 'long', 
-                      year: 'numeric' 
-                    })}
+          ) : perfilAcademico ? (
+            <div className="grid gap-6 py-4">
+              {/* Header del perfil */}
+              <div className="flex items-center gap-6 p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-blue-900/20 dark:via-gray-800 dark:to-purple-900/20 border border-blue-100 dark:border-blue-800/30">
+                <Avatar className="h-20 w-20 ring-4 ring-blue-500/20">
+                  <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-800 text-white font-bold text-xl">
+                    {getInitials(perfilAcademico.nombre_completo)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    {capitalizeName(perfilAcademico.nombre_completo)}
+                  </h3>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">
+                    {perfilAcademico.tipo_doc}: {perfilAcademico.documento}
                   </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                    <Badge className="bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0">
+                      {perfilAcademico.estado_matricula}
+                    </Badge>
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      Semestre {perfilAcademico.semestre}
+                    </Badge>
+                    {perfilAcademico.grupo && (
+                      <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                        Grupo {perfilAcademico.grupo}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Información académica */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="bg-blue-100 dark:bg-blue-900/30 p-2.5 rounded-lg">
+                    <GraduationCap className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Programa</p>
+                    <p className="font-medium text-gray-900 dark:text-white text-sm truncate" title={perfilAcademico.programa}>
+                      {perfilAcademico.programa}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="bg-purple-100 dark:bg-purple-900/30 p-2.5 rounded-lg">
+                    <Building2 className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Sede</p>
+                    <p className="font-medium text-gray-900 dark:text-white text-sm">{perfilAcademico.sede}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="bg-green-100 dark:bg-green-900/30 p-2.5 rounded-lg">
+                    <Calendar className="h-5 w-5 text-green-600 dark:text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Periodo</p>
+                    <p className="font-medium text-gray-900 dark:text-white text-sm">{perfilAcademico.periodo}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50">
+                  <div className="bg-orange-100 dark:bg-orange-900/30 p-2.5 rounded-lg">
+                    <BookOpen className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Materias Inscritas</p>
+                    <p className="font-medium text-gray-900 dark:text-white text-sm">
+                      {perfilAcademico.materias?.length || 0} materias
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Lista de materias */}
+              {perfilAcademico.materias && perfilAcademico.materias.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    Materias del Periodo
+                  </h4>
+                  <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                    {perfilAcademico.materias.map((materia, index) => (
+                      <div 
+                        key={index} 
+                        className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800/50 dark:to-gray-700/50 hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-900/20 dark:hover:to-purple-900/20 transition-all duration-300 border border-gray-100 dark:border-gray-700"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-white text-sm truncate" title={materia.nombre}>
+                            {materia.nombre}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Código: {materia.codigo}
+                          </p>
+                        </div>
+                        <div className="text-right ml-3 shrink-0">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Docente</p>
+                          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 truncate max-w-[150px]" title={materia.docente?.nombre}>
+                            {materia.docente?.nombre || 'Sin asignar'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Roles del usuario */}
+              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 border border-indigo-100 dark:border-indigo-800/30">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2 mb-3">
+                  <Award className="h-4 w-4 text-indigo-600" />
+                  Roles Asignados
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="bg-gradient-to-r from-indigo-600 to-purple-600 text-white border-0">
+                    {perfilAcademico.roles.principal.nombre}
+                  </Badge>
+                  {perfilAcademico.roles.adicionales.map((rol, index) => (
+                    <Badge key={index} variant="secondary" className="bg-white/80 dark:bg-gray-700/80">
+                      {rol.nombre}
+                    </Badge>
+                  ))}
                 </div>
               </div>
             </div>
-          </div>
+          ) : (
+            <div className="grid gap-6 py-4">
+              <div className="flex items-center gap-6">
+                <Avatar className="h-20 w-20">
+                  <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-800 text-white font-bold text-xl">
+                    {getInitials(capitalizedName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">{capitalizedName}</h3>
+                  <p className="text-gray-500 dark:text-gray-400">{user?.primaryRole}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                      {user?.primaryRole}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                <p>No se pudo cargar la información académica completa.</p>
+                <p className="text-sm">Intenta recargar la página.</p>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>

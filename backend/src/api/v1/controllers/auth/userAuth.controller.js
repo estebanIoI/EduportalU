@@ -57,7 +57,8 @@ const getProfile = async (req, res, next) => {
     console.error('Error en getProfile:', error);
     
     // Manejar errores específicos del servicio
-    if (error.code) {
+    // Solo usar error.code si es un número válido de HTTP (100-599)
+    if (error.code && typeof error.code === 'number' && error.code >= 100 && error.code < 600) {
       return errorResponse(res, {
         code: error.code,
         message: error.message,
@@ -65,10 +66,11 @@ const getProfile = async (req, res, next) => {
       });
     }
     
+    // Para errores de conexión u otros errores no HTTP
     return errorResponse(res, {
       code: 500,
-      message: MESSAGES.GENERAL.ERROR,
-      error: error.message
+      message: error.message || MESSAGES.GENERAL.ERROR,
+      error: error.code || error.message
     });
   }
 };

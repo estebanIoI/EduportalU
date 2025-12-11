@@ -44,21 +44,44 @@ interface FiltrosDinamicos {
   grupo?: string
 }
 
+// Función para contar filtros activos
+const contarFiltrosActivos = (filtros: FiltrosState): number => {
+  let count = 0;
+  if (filtros.sedeSeleccionada) count++;
+  if (filtros.programaSeleccionado) count++;
+  if (filtros.semestreSeleccionado) count++;
+  if (filtros.grupoSeleccionado) count++;
+  return count;
+}
+
 function extractData<T>(response: ApiResponse<T>): T {
   return response.data
 }
 
-// Función para formatear fechas
-const formatearFecha = (fechaISO: string): string => {
+// Función para formatear fechas sin problemas de zona horaria
+const formatearFecha = (fechaString: string): string => {
   try {
-    const fecha = new Date(fechaISO);
+    // Si la fecha está en formato YYYY-MM-DD, parseamos directamente sin zona horaria
+    const match = fechaString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, year, month, day] = match;
+      // Crear fecha usando los componentes directamente (sin zona horaria)
+      const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      return fecha.toLocaleDateString('es-ES', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+    // Fallback
+    const fecha = new Date(fechaString);
     return fecha.toLocaleDateString('es-ES', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
   } catch (error) {
-    return fechaISO;
+    return fechaString;
   }
 };
 
@@ -171,31 +194,46 @@ export default function Filtros({
       try {
         setLoadingOpciones(true)
         
-        // Construir filtros para enviar al backend
+        // Construir filtros para enviar al backend según la estructura del endpoint /academica/opciones-filtros
         const filtrosDinamicos: FiltrosDinamicos = {
           periodo: filtros.periodoSeleccionado,
           ...(filtros.sedeSeleccionada && { sede: filtros.sedeSeleccionada }),
           ...(filtros.programaSeleccionado && { programa: filtros.programaSeleccionado }),
           ...(filtros.semestreSeleccionado && { semestre: filtros.semestreSeleccionado }),
+          // Nota: grupo se incluye para filtrado interno pero el backend usa los demás para calcular opciones disponibles
           ...(filtros.grupoSeleccionado && { grupo: filtros.grupoSeleccionado })
         }
 
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Frontend - Filtros enviados al endpoint /academica/opciones-filtros:', filtrosDinamicos);
+        }
         const response = await vistaAcademicaService.getOpcionesFiltros(filtrosDinamicos)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Frontend - Respuesta recibida:', response);
+        }
         
-        // Fix for the second error: Handle the response type properly
+        // Manejar el tipo de respuesta del backend correctamente
         let opciones: OpcionesFiltrosResponse = {}
         
         if (response && typeof response === 'object') {
-          // If response is ApiResponse type
+          // Si la respuesta es del tipo ApiResponse con data
           if ('data' in response && response.data) {
             opciones = response.data as OpcionesFiltrosResponse
           } 
-          // If response is already the data object
+          // Si la respuesta ya contiene directamente las opciones
           else if ('sedes' in response || 'programas' in response || 'semestres' in response || 'grupos' in response) {
             opciones = response as OpcionesFiltrosResponse
           }
         }
         
+        if (process.env.NODE_ENV === 'development') {
+          console.log('Frontend - Opciones de filtros cargadas:', {
+            sedes: opciones.sedes?.length || 0,
+            programas: opciones.programas?.length || 0,
+            semestres: opciones.semestres?.length || 0,
+            grupos: opciones.grupos?.length || 0
+          });
+        }
         setOpcionesFiltros(opciones)
 
       } catch (error) {
@@ -278,6 +316,33 @@ return (
       <CardDescription className="text-blue-100 mt-2">
         Configura los parámetros de evaluación y personaliza los criterios de filtrado para obtener datos específicos
       </CardDescription>
+      
+      {/* Indicador de filtros activos */}
+      {contarFiltrosActivos(filtros) > 0 && (
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <span className="text-blue-200 text-sm">Filtros activos:</span>
+          {filtros.sedeSeleccionada && (
+            <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-medium">
+              Sede: {filtros.sedeSeleccionada}
+            </span>
+          )}
+          {filtros.programaSeleccionado && (
+            <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-medium">
+              Programa: {filtros.programaSeleccionado.substring(0, 20)}{filtros.programaSeleccionado.length > 20 ? '...' : ''}
+            </span>
+          )}
+          {filtros.semestreSeleccionado && (
+            <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-medium">
+              Semestre: {filtros.semestreSeleccionado}
+            </span>
+          )}
+          {filtros.grupoSeleccionado && (
+            <span className="px-2 py-1 bg-white/20 rounded-full text-xs font-medium">
+              Grupo: {filtros.grupoSeleccionado}
+            </span>
+          )}
+        </div>
+      )}
     </CardHeader>
     
     <CardContent className="p-6">
@@ -341,6 +406,9 @@ return (
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
             <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
             Sede
+            {opcionesFiltros.sedes && opcionesFiltros.sedes.length > 0 && (
+              <span className="text-xs text-gray-500 font-normal">({opcionesFiltros.sedes.length})</span>
+            )}
           </label>
           <div className="relative">
             <select
@@ -370,6 +438,9 @@ return (
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
             <span className="w-2 h-2 bg-green-500 rounded-full"></span>
             Programa
+            {opcionesFiltros.programas && opcionesFiltros.programas.length > 0 && (
+              <span className="text-xs text-gray-500 font-normal">({opcionesFiltros.programas.length})</span>
+            )}
           </label>
           <div className="relative">
             <select
@@ -399,6 +470,9 @@ return (
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
             <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
             Semestre
+            {opcionesFiltros.semestres && opcionesFiltros.semestres.length > 0 && (
+              <span className="text-xs text-gray-500 font-normal">({opcionesFiltros.semestres.length})</span>
+            )}
           </label>
           <div className="relative">
             <select
@@ -428,6 +502,9 @@ return (
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-800">
             <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
             Grupo
+            {opcionesFiltros.grupos && opcionesFiltros.grupos.length > 0 && (
+              <span className="text-xs text-gray-500 font-normal">({opcionesFiltros.grupos.length})</span>
+            )}
           </label>
           <div className="relative">
             <select

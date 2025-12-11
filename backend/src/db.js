@@ -14,7 +14,9 @@ const poolConfig = {
   connectTimeout: 10000, // 10 segundos
   waitForConnectionsTimeout: 10000, // 10 segundos
   enableKeepAlive: true,
-  keepAliveInitialDelay: 0
+  keepAliveInitialDelay: 0,
+  timezone: '+00:00', // UTC - evitar conversiones de zona horaria
+  dateStrings: true // Devolver fechas como strings en lugar de objetos Date
 };
 
 async function initializeDatabase() {

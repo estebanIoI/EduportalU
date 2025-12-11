@@ -53,6 +53,15 @@ const getEvaluacionesByDocente = async (documentoDocente) => {
   }
 };
 
+const getEvaluacionesByEstudianteAsignatura = async (documentoEstudiante, codigoAsignatura) => {
+  try {
+    const evaluaciones = await Evaluaciones.getEvaluacionesByEstudianteAsignatura(documentoEstudiante, codigoAsignatura);
+    return evaluaciones;
+  } catch (error) {
+    throw error;
+  }
+};
+
 const createEvaluacion = async (evaluacionData) => {
   try {
     const nuevaEvaluacion = await Evaluaciones.createEvaluacion(evaluacionData);
@@ -92,10 +101,42 @@ const createEvaluacionesForEstudiante = async (documentoEstudiante, tipoEvaluaci
     const fechaActual = new Date();
     const fechaInicio = new Date(configuracionDetalles.configuracion.FECHA_INICIO);
     const fechaFin = new Date(configuracionDetalles.configuracion.FECHA_FIN);
+    
+    // En desarrollo, permitir bypass de validación de fechas
+    const skipDateValidation = process.env.NODE_ENV === 'development' || process.env.SKIP_DATE_VALIDATION === 'true';
+    
+    console.log('📅 [createEvaluacionesForEstudiante] Verificación de fechas:', {
+      fechaActual: fechaActual.toISOString().split('T')[0],
+      fechaInicio: fechaInicio.toISOString().split('T')[0],
+      fechaFin: fechaFin.toISOString().split('T')[0],
+      dentroDelPeriodo: fechaActual >= fechaInicio && fechaActual <= fechaFin,
+      skipDateValidation
+    });
 
-    if (fechaActual < fechaInicio || fechaActual > fechaFin) {
+    if (!skipDateValidation && (fechaActual < fechaInicio || fechaActual > fechaFin)) {
       throw new Error('La evaluación no está disponible en este momento');
     }
+
+    // Verificar si es una evaluación de docentes
+    // Si NO es evaluación de docentes, no crear evaluaciones in-situ
+    console.log('🔍 Configuración cargada:', {
+      ID: tipoEvaluacionId,
+      ES_EVALUACION_DOCENTE: configuracionDetalles.configuracion.ES_EVALUACION_DOCENTE,
+      tipo: typeof configuracionDetalles.configuracion.ES_EVALUACION_DOCENTE,
+      esVerdadero: !!configuracionDetalles.configuracion.ES_EVALUACION_DOCENTE
+    });
+    
+    if (!configuracionDetalles.configuracion.ES_EVALUACION_DOCENTE) {
+      console.log('⚠️ No es evaluación de docentes, devolviendo flag genérico');
+      return {
+        evaluacionesCreadas: [],
+        aspectos: configuracionDetalles.aspectos,
+        valoraciones: configuracionDetalles.valoraciones,
+        isGenericEvaluation: true // Flag para indicar que es evaluación genérica
+      };
+    }
+    
+    console.log('✅ ES evaluación de docentes, procediendo a crear evaluaciones');
 
     // Obtener información del perfil del estudiante
     const perfilEstudiante = await VistaEstudianteModel.getEstudianteByDocumento(documentoEstudiante);
@@ -194,7 +235,7 @@ const getEvaluacionesPendientesForEstudiante = async (documentoEstudiante) => {
         if (configuracion && configuracion.configuracion.ACTIVO) {
           // Verificar si hay evaluaciones para este tipo
           const evaluacionesDeTipo = evaluacionesEstudiante.filter(
-            eval => eval.CONFIGURACION_ID === tipo.ID
+            evaluacion => evaluacion.CONFIGURACION_ID === tipo.ID
           );
 
           // Verificar período de evaluación
@@ -261,8 +302,19 @@ const iniciarProcesoEvaluacion = async (documentoEstudiante, tipoEvaluacionId) =
     const fechaActual = new Date();
     const fechaInicio = new Date(configuracionDetalles.configuracion.FECHA_INICIO);
     const fechaFin = new Date(configuracionDetalles.configuracion.FECHA_FIN);
+    
+    // En desarrollo, permitir bypass de validación de fechas
+    const skipDateValidation = process.env.NODE_ENV === 'development' || process.env.SKIP_DATE_VALIDATION === 'true';
+    
+    console.log('📅 [iniciarProcesoEvaluacion] Verificación de fechas:', {
+      fechaActual: fechaActual.toISOString().split('T')[0],
+      fechaInicio: fechaInicio.toISOString().split('T')[0],
+      fechaFin: fechaFin.toISOString().split('T')[0],
+      dentroDelPeriodo: fechaActual >= fechaInicio && fechaActual <= fechaFin,
+      skipDateValidation
+    });
 
-    if (fechaActual < fechaInicio || fechaActual > fechaFin) {
+    if (!skipDateValidation && (fechaActual < fechaInicio || fechaActual > fechaFin)) {
       throw new Error('La evaluación no está disponible en este momento');
     }
 
@@ -316,16 +368,154 @@ const iniciarProcesoEvaluacion = async (documentoEstudiante, tipoEvaluacionId) =
   }
 };
 
+/**
+ * Obtiene los resultados de evaluación de un docente
+ * @param {string} documentoDocente - Documento del docente
+ * @param {string|null} codigoMateria - Código de materia opcional
+ * @returns {Object} Resultados de evaluación con nota final y aspectos a mejorar
+ */
+const getResultadosEvaluacionDocente = async (documentoDocente, codigoMateria = null) => {
+  try {
+    const resultados = await Evaluaciones.getResultadosEvaluacionDocente(documentoDocente, codigoMateria);
+    
+    // Procesar los datos para estructurar mejor la respuesta
+    const { aspectos, estadisticasGenerales, comentarios } = resultados;
+    
+    // Calcular promedio general ponderado
+    // NOTA: Los puntajes ya están en escala 1-5 (Deficiente=2, Aceptable=3, Bueno=4, Excelente=5)
+    let promedioGeneralTotal = 0;
+    let totalEvaluacionesTotal = 0;
+    
+    estadisticasGenerales.forEach(stat => {
+      promedioGeneralTotal += parseFloat(stat.promedio_general || 0) * stat.total_evaluaciones;
+      totalEvaluacionesTotal += stat.total_evaluaciones;
+    });
+    
+    // notaFinal ya está en escala 1-5, no necesita conversión
+    const notaFinal = totalEvaluacionesTotal > 0 
+      ? (promedioGeneralTotal / totalEvaluacionesTotal) 
+      : 0;
+    
+    // Identificar aspectos a mejorar (promedio < 3.5 en escala 1-5, equivale a menos de 70%)
+    const aspectosAMejorar = aspectos
+      .filter(a => parseFloat(a.promedio_aspecto) < 3.5)
+      .map(a => ({
+        aspecto: a.aspecto,
+        descripcion: a.descripcion_aspecto,
+        promedio: (parseFloat(a.promedio_aspecto) / 5).toFixed(2), // Normalizado a 0-1 para el frontend
+        codigoMateria: a.CODIGO_MATERIA,
+        totalEvaluaciones: a.total_evaluaciones,
+        distribucion: {
+          excelente: a.total_excelente,
+          bueno: a.total_bueno,
+          aceptable: a.total_aceptable,
+          deficiente: a.total_deficiente
+        }
+      }))
+      .sort((a, b) => parseFloat(a.promedio) - parseFloat(b.promedio));
+    
+    // Agrupar aspectos por materia
+    const aspectosPorMateria = {};
+    aspectos.forEach(a => {
+      if (!aspectosPorMateria[a.CODIGO_MATERIA]) {
+        aspectosPorMateria[a.CODIGO_MATERIA] = [];
+      }
+      aspectosPorMateria[a.CODIGO_MATERIA].push({
+        aspecto: a.aspecto,
+        descripcion: a.descripcion_aspecto,
+        promedio: (parseFloat(a.promedio_aspecto) / 5).toFixed(2), // Normalizado a 0-1 para el frontend
+        totalEvaluaciones: a.total_evaluaciones,
+        distribucion: {
+          excelente: a.total_excelente,
+          bueno: a.total_bueno,
+          aceptable: a.total_aceptable,
+          deficiente: a.total_deficiente
+        }
+      });
+    });
+    
+    // Calcular nota final por materia (normalizada a 0-1 para el frontend)
+    const notaFinalPorMateria = estadisticasGenerales.map(stat => ({
+      codigoMateria: stat.CODIGO_MATERIA,
+      notaFinal: (parseFloat(stat.promedio_general) / 5).toFixed(2), // Normalizado a 0-1 para el frontend
+      totalEvaluaciones: stat.total_evaluaciones,
+      totalEstudiantes: stat.total_estudiantes_evaluadores,
+      aspectos: aspectosPorMateria[stat.CODIGO_MATERIA] || []
+    }));
+    
+    // notaFinal ya está en escala 1-5
+    const notaFinalEscala5 = notaFinal.toFixed(2);
+    
+    // Normalizar a 0-1 para el frontend (notaFinal / 5)
+    const notaFinalNormalizada = notaFinal / 5;
+    
+    // Determinar calificación cualitativa basada en escala 1-5
+    // Excelente: >= 4.5, Bueno: >= 3.75, Aceptable: >= 3.0, Deficiente: < 3.0
+    let calificacionCualitativa = 'Sin evaluaciones';
+    if (notaFinal >= 4.5) calificacionCualitativa = 'Excelente';
+    else if (notaFinal >= 3.75) calificacionCualitativa = 'Bueno';
+    else if (notaFinal >= 3.0) calificacionCualitativa = 'Aceptable';
+    else if (notaFinal > 0) calificacionCualitativa = 'Deficiente';
+    
+    return {
+      notaFinal: notaFinalNormalizada.toFixed(2), // Normalizado a 0-1 para compatibilidad con el frontend
+      notaFinalEscala5,
+      calificacionCualitativa,
+      totalEvaluaciones: totalEvaluacionesTotal,
+      totalEstudiantes: estadisticasGenerales.reduce((sum, s) => sum + s.total_estudiantes_evaluadores, 0),
+      aspectosAMejorar,
+      notaFinalPorMateria,
+      comentarios: comentarios.map(c => ({
+        codigoMateria: c.CODIGO_MATERIA,
+        comentarioGeneral: c.COMENTARIO_GENERAL,
+        aspecto: c.aspecto,
+        comentarioAspecto: c.comentario_aspecto,
+        fecha: c.FECHA_CREACION
+      })).filter(c => c.comentarioGeneral || c.comentarioAspecto)
+    };
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Obtiene la autoevaluación de un docente para un periodo específico
+ */
+const getAutoevaluacionDocente = async (documentoDocente, periodo) => {
+  try {
+    const autoevaluacion = await Evaluaciones.getAutoevaluacionDocente(documentoDocente, periodo);
+    return autoevaluacion;
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Crea o actualiza la autoevaluación de un docente
+ */
+const createAutoevaluacionDocente = async (documentoDocente, periodo, respuestas) => {
+  try {
+    const resultado = await Evaluaciones.createAutoevaluacionDocente(documentoDocente, periodo, respuestas);
+    return resultado;
+  } catch (error) {
+    throw error;
+  }
+};
+
 module.exports = {
   getAllEvaluaciones,
   getEvaluacionById,
   getEvaluacionesByEstudiante,
   getEvaluacionesByEstudianteByConfiguracion,
   getEvaluacionesByDocente,
+  getEvaluacionesByEstudianteAsignatura,
   createEvaluacion,
   updateEvaluacion,
   deleteEvaluacion,
   createEvaluacionesForEstudiante,
   getEvaluacionesPendientesForEstudiante,
   iniciarProcesoEvaluacion,
+  getResultadosEvaluacionDocente,
+  getAutoevaluacionDocente,
+  createAutoevaluacionDocente,
 };

@@ -46,26 +46,43 @@ class ApiClient {
 
   // Método privado para manejar errores
   private handleError(error: AxiosError<ApiError>): never {
-    // Solo log detallado en desarrollo
-    if (process.env.NODE_ENV === 'development') {
-      console.error('API Client Error:', error);
-      console.error('Response data:', error.response?.data);
-    }
-    console.error('Response status:', error.response?.status);
-    
     let errorTitle = "Error";
     let errorMessage = 'Error de conexión';
     
+    // Log detallado solo en desarrollo
+    if (process.env.NODE_ENV === 'development') {
+      console.error('API Client Error:', {
+        message: error.message,
+        code: error.code,
+        status: error.response?.status,
+        url: error.config?.url,
+      });
+    }
+    
     if (error.response) {
       // Error de respuesta del servidor
-      if (error.response.status === 401 || error.response.status === 403) {
-        errorTitle = "Error de autenticación";
-        errorMessage = error.response?.data?.message || 'Tu sesión ha expirado o no tienes permisos suficientes';
+      const status = error.response.status;
+      
+      if (status === 401) {
+        errorTitle = "Sesión expirada";
+        errorMessage = 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
+      } else if (status === 403) {
+        errorTitle = "Acceso denegado";
+        errorMessage = 'No tienes permisos para realizar esta acción.';
+      } else if (status === 404) {
+        errorTitle = "No encontrado";
+        errorMessage = 'El recurso solicitado no existe.';
+      } else if (status === 500) {
+        errorTitle = "Error del servidor";
+        errorMessage = 'Error interno del servidor. Por favor, intenta más tarde.';
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-    } else if (error.request) {
-      // No se recibió respuesta del servidor
+    } else if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      errorTitle = "Tiempo agotado";
+      errorMessage = 'El servidor tardó demasiado en responder. Verifica tu conexión e intenta nuevamente.';
+    } else if (error.code === 'ERR_NETWORK' || error.request) {
+      errorTitle = "Sin conexión";
       errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
     }
     
@@ -161,10 +178,14 @@ class ApiClient {
   async get<T = any>(
     url: string, 
     config?: any,
-    options?: { showMessage?: boolean }
+    options?: { showMessage?: boolean; timeout?: number }
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await this.axiosInstance.get(url, config);
+      const requestConfig = {
+        ...config,
+        ...(options?.timeout && { timeout: options.timeout })
+      };
+      const response = await this.axiosInstance.get(url, requestConfig);
       return this.handleResponse(response.data, options?.showMessage);
     } catch (error) {
       return this.handleError(error as AxiosError<ApiError>);

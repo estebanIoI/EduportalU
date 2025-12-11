@@ -4,11 +4,11 @@ import { ApiConfig } from '@/lib/types/api.types';
 const getApiBaseUrl = (): string => {
   // En producción, usar la IP del servidor
   if (process.env.NODE_ENV === 'production') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://62.146.231.110:3000/api/v1';
+    return process.env.NEXT_PUBLIC_API_URL || 'http://62.146.231.110:5000/api/v1';
   }
   
   // En desarrollo, usar localhost o la variable de entorno
-  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api/v1';
+  return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 };
 
 // Validación de variables de entorno requeridas
@@ -28,10 +28,13 @@ validateEnvironmentVariables();
 // Configuración del entorno
 export const API_CONFIG: ApiConfig = {
   baseURL: getApiBaseUrl(),
-  timeout: Number(process.env.NEXT_PUBLIC_API_TIMEOUT) || 30000, 
-  retryAttempts: Number(process.env.NEXT_PUBLIC_RETRY_ATTEMPTS) || 3,
+  timeout: Number(process.env.NEXT_PUBLIC_API_TIMEOUT) || 30000, // 30 segundos por defecto
+  retryAttempts: Number(process.env.NEXT_PUBLIC_RETRY_ATTEMPTS) || 2,
   retryDelay: Number(process.env.NEXT_PUBLIC_RETRY_DELAY) || 1000,
 };
+
+// Timeout extendido para operaciones de IA (3 minutos)
+export const IA_TIMEOUT = 180000;
 
 // Headers por defecto
 export const DEFAULT_HEADERS = {

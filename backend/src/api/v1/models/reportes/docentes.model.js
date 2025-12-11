@@ -90,24 +90,51 @@ const getCompletedEvaluationsMap = async (idConfiguracion, combinaciones) => {
   const pool = await getPool();
   const { placeholders, params } = createInPlaceholders(combinaciones);
   
-  const evaluacionesQuery = `
-    SELECT 
-      e.DOCUMENTO_ESTUDIANTE,
-      e.CODIGO_MATERIA,
-      ed.ID as detalle_id
-    FROM evaluaciones e
-    LEFT JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
-    WHERE e.ID_CONFIGURACION = ?
-      AND (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
-  `;
+  // Si no se proporciona idConfiguracion, buscar evaluaciones sin filtrar por configuración
+  // pero asegurándose de que tengan detalle completado
+  let evaluacionesQuery;
+  let evaluacionesParams;
   
-  const evaluacionesParams = [idConfiguracion, ...params];
+  if (idConfiguracion) {
+    evaluacionesQuery = `
+      SELECT 
+        e.DOCUMENTO_ESTUDIANTE,
+        e.CODIGO_MATERIA,
+        ed.ID as detalle_id
+      FROM evaluaciones e
+      LEFT JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
+      WHERE e.ID_CONFIGURACION = ?
+        AND (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
+    `;
+    evaluacionesParams = [idConfiguracion, ...params];
+  } else {
+    // Sin idConfiguracion, buscar cualquier evaluación completada (con detalle)
+    evaluacionesQuery = `
+      SELECT 
+        e.DOCUMENTO_ESTUDIANTE,
+        e.CODIGO_MATERIA,
+        COUNT(DISTINCT ed.ID) as tiene_detalle
+      FROM evaluaciones e
+      LEFT JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
+      WHERE (e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA) IN (${placeholders})
+      GROUP BY e.DOCUMENTO_ESTUDIANTE, e.CODIGO_MATERIA
+      HAVING tiene_detalle > 0
+    `;
+    evaluacionesParams = params;
+  }
+  
   const [evaluacionesData] = await pool.query(evaluacionesQuery, evaluacionesParams);
   
   const evaluationMap = new Map();
   evaluacionesData.forEach(row => {
-    const key = `${row.DOCUMENTO_ESTUDIANTE}-${row.CODIGO_MATERIA}`;
-    if (row.detalle_id !== null) {
+    // Asegurar que ambos valores sean strings para consistencia en las claves
+    const key = `${String(row.DOCUMENTO_ESTUDIANTE)}-${String(row.CODIGO_MATERIA)}`;
+    if (idConfiguracion) {
+      if (row.detalle_id !== null) {
+        evaluationMap.set(key, true);
+      }
+    } else {
+      // Para la consulta agrupada, si llegó aquí ya tiene detalle
       evaluationMap.set(key, true);
     }
   });
@@ -237,7 +264,8 @@ const processAcademicDataForTeachersAssignments = (academicData, filters = {}) =
       }
       
       const grupoData = asignaturaData.grupos.get(grupo);
-      const studentKey = `${student.ID_ESTUDIANTE}-${codAsignatura}`;
+      // Asegurar que ambos valores sean strings para consistencia con evaluationMap
+      const studentKey = `${String(student.ID_ESTUDIANTE)}-${String(codAsignatura)}`;
       
       if (!grupoData.estudiantes.has(studentKey)) {
         grupoData.estudiantes.add(studentKey);
@@ -302,9 +330,9 @@ const buildTeachersAssignmentsResults = (processedData, evaluationMap) => {
 // FUNCIONES PRINCIPALES DE NEGOCIO
 // ======================================
 
-const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo, pagination }) => {
+const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo, idDocente, pagination }) => {
   try {
-    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo, idDocente };
     
     // Obtener datos académicos sin filtrar por semestre predominante
     const academicData = await getAcademicData({ ...filters, semestre: undefined }, [
@@ -314,9 +342,12 @@ const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSed
     
     if (academicData.length === 0) return [];
     
-    // Obtener evaluaciones completadas
+    // Obtener evaluaciones completadas - asegurar strings para consistencia
     const combinaciones = academicData
-      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .map(row => ({ 
+        estudiante: String(row.ID_ESTUDIANTE), 
+        asignatura: String(row.COD_ASIGNATURA) 
+      }))
       .filter((item, index, self) =>
         index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
       );
@@ -328,9 +359,11 @@ const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSed
     
     // Construir resultados finales
     const finalResults = processedData.map(docente => {
-      let evaluaciones_completadas = 0;
+      let evaluaciones_completadas_docente = 0;
       
       docente.asignaturas.forEach(asignatura => {
+        let evaluaciones_completadas_asignatura = 0;
+        
         asignatura.grupos.forEach(grupo => {
           let completadas = 0;
           grupo.estudiantes.forEach(studentKey => {
@@ -339,18 +372,27 @@ const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSed
           
           grupo.evaluaciones_completadas = completadas;
           grupo.porcentaje_completado = calcularPorcentaje(completadas, grupo.total_evaluaciones_esperadas);
-          evaluaciones_completadas += completadas;
+          evaluaciones_completadas_asignatura += completadas;
         });
+        
+        // Actualizar estadísticas de la asignatura
+        asignatura.evaluaciones_completadas = evaluaciones_completadas_asignatura;
+        asignatura.porcentaje_completado = calcularPorcentaje(
+          evaluaciones_completadas_asignatura, 
+          asignatura.total_evaluaciones_esperadas
+        );
+        
+        evaluaciones_completadas_docente += evaluaciones_completadas_asignatura;
       });
       
       return {
         ...docente,
-        evaluaciones_completadas,
-        evaluaciones_pendientes: docente.total_evaluaciones_esperadas - evaluaciones_completadas,
-        porcentaje_completado: calcularPorcentaje(evaluaciones_completadas, docente.total_evaluaciones_esperadas),
+        evaluaciones_completadas: evaluaciones_completadas_docente,
+        evaluaciones_pendientes: docente.total_evaluaciones_esperadas - evaluaciones_completadas_docente,
+        porcentaje_completado: calcularPorcentaje(evaluaciones_completadas_docente, docente.total_evaluaciones_esperadas),
         estado_evaluacion: 
-          evaluaciones_completadas === 0 ? 'NO INICIADO' :
-          docente.total_evaluaciones_esperadas === evaluaciones_completadas ? 'COMPLETADO' : 'EN PROGRESO'
+          evaluaciones_completadas_docente === 0 ? 'NO INICIADO' :
+          docente.total_evaluaciones_esperadas === evaluaciones_completadas_docente ? 'COMPLETADO' : 'EN PROGRESO'
       };
     });
     
@@ -369,9 +411,9 @@ const getDocentesAsignaturasModel = async ({ idConfiguracion, periodo, nombreSed
   }
 };
 
-const getCount = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo }) => {
+const getCount = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, semestre, grupo, idDocente }) => {
   try {
-    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo };
+    const filters = { periodo, nombreSede, nomPrograma, semestre, grupo, idDocente };
     const academicData = await getAcademicData(filters, [
       'COD_ASIGNATURA', 'ASIGNATURA', 'ID_DOCENTE', 'DOCENTE',
       'SEMESTRE', 'NOM_PROGRAMA', 'NOMBRE_SEDE', 'GRUPO', 'ID_ESTUDIANTE'
@@ -380,7 +422,10 @@ const getCount = async ({ idConfiguracion, periodo, nombreSede, nomPrograma, sem
     if (academicData.length === 0) return 0;
     
     const combinaciones = academicData
-      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .map(row => ({ 
+        estudiante: String(row.ID_ESTUDIANTE), 
+        asignatura: String(row.COD_ASIGNATURA) 
+      }))
       .filter((item, index, self) =>
         index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
       );
@@ -423,6 +468,7 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
     
     const { placeholders, params } = createInPlaceholders(combinaciones);
     
+    // Consultar evaluaciones de docentes (in-situ) con detalle
     const evaluacionesQuery = `
       SELECT 
         e.DOCUMENTO_ESTUDIANTE,
@@ -434,12 +480,31 @@ const getEstudiantesEvaluadosModel = async (idDocente, codAsignatura, grupo) => 
     `;
     const [evaluaciones] = await localPool.query(evaluacionesQuery, params);
     
+    // Consultar evaluaciones genéricas completadas
+    const documentosEstudiantes = estudiantes.map(est => est.ID_ESTUDIANTE);
+    const placeholdersGenericas = documentosEstudiantes.map(() => '?').join(', ');
+    
+    const evaluacionesGenericasQuery = `
+      SELECT DISTINCT DOCUMENTO_ESTUDIANTE
+      FROM EVALUACIONES_GENERICAS
+      WHERE DOCUMENTO_ESTUDIANTE IN (${placeholdersGenericas})
+        AND ESTADO = 'completada'
+    `;
+    const [evaluacionesGenericas] = await localPool.query(evaluacionesGenericasQuery, documentosEstudiantes);
+    
     const total_estudiantes = estudiantes.length;
+    
+    // Combinar estudiantes con evaluación de docentes
     const estudiantesConEvaluacion = new Set(
       evaluaciones
         .filter(ev => ev.tiene_evaluacion > 0)
         .map(ev => ev.DOCUMENTO_ESTUDIANTE)
     );
+    
+    // Agregar estudiantes con evaluación genérica completada
+    evaluacionesGenericas.forEach(ev => {
+      estudiantesConEvaluacion.add(ev.DOCUMENTO_ESTUDIANTE);
+    });
     
     return {
       total_estudiantes,

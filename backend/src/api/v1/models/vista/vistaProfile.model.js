@@ -6,95 +6,70 @@ const VistaProfileModel = {
 
   // INFORMACION DE ESTUDIANTE
 
-  async getEstudianteInfo(documento) {
+  async getEstudianteAcademicInfo(documento) {
     const remotePool = await getRemotePool(); // sigedin_ies
-    const securityPool = await getSecurityPool(); // sigedin_seguridad
     
-    // Consulta principal de estudiante desde sigedin_ies
-    const [estudianteInfo] = await remotePool.query(
-      `SELECT 
-          e.SEDE,
-          e.TIPO_DOC,
-          e.DOCUMENTO_ESTUDIANTE,
-          e.ESTADO_MATRICULA,
-          p.NOM_PROGRAMA,
-          e.SEMESTRE_MATRICULA,
-          p.SEMESTRE,
-          p.GRUPO
-      FROM vista_estudiantes e
-      JOIN vista_academica_insitus p 
-          ON e.DOCUMENTO_ESTUDIANTE = p.ID_ESTUDIANTE
-      WHERE e.DOCUMENTO_ESTUDIANTE = ?
-      GROUP BY 
-          e.SEMESTRE_MATRICULA,
-          e.SEDE,
-          e.TIPO_DOC,
-          e.DOCUMENTO_ESTUDIANTE,
-          e.ESTADO_MATRICULA,
-          p.NOM_PROGRAMA,
-          p.SEMESTRE,
-          p.GRUPO`,
-      [documento]
-    );
+    // Consulta principal de estudiante + materias desde sigedin_ies
+    const estudianteRows = await remotePool.query(
+        `SELECT DISTINCT
+            e.SEDE,
+            e.TIPO_DOC,
+            e.DOCUMENTO_ESTUDIANTE,
+            e.ESTADO_MATRICULA,
+            p.NOM_PROGRAMA,
+            e.SEMESTRE_MATRICULA,
+            p.SEMESTRE,
+            p.GRUPO,
+            p.COD_ASIGNATURA as CODIGO_MATERIA,
+            p.ASIGNATURA as NOMBRE_MATERIA,
+            p.ID_DOCENTE as DOCUMENTO_DOCENTE,
+            p.DOCENTE as NOMBRE_DOCENTE
+        FROM vista_estudiantes e
+        LEFT JOIN vista_academica_insitus p 
+            ON e.DOCUMENTO_ESTUDIANTE = p.ID_ESTUDIANTE
+        WHERE e.DOCUMENTO_ESTUDIANTE = ?`,
+        [documento]
+    ).then(([rows]) => rows);
 
-    // Consulta de datos de login desde sigedin_seguridad
-    const [loginInfo] = await securityPool.query(
-      `SELECT 
-          dl.user_name,
-          dl.user_idrole,
-          dl.role_name AS ROL_PRINCIPAL,
-          dl.user_id
-      FROM datalogin dl 
-      WHERE dl.user_username = ?`,
-      [documento]
-    );
-
-    // Si no hay información de estudiante o login, retornar array vacío
-    if (estudianteInfo.length === 0 || loginInfo.length === 0) {
-      return [];
+    // Si no hay información de estudiante, retornar null
+    if (estudianteRows.length === 0) {
+      return null;
     }
 
-    // Obtener roles adicionales desde base local
-    const localPool = await getPool();
-    const [additionalRoles] = await localPool.query(
-      `SELECT 
-          r.ID AS ID_ROL_ADICIONAL,
-          r.NOMBRE_ROL AS ROL_ADICIONAL
-      FROM users_roles ur 
-      JOIN roles r ON ur.rol_id = r.ID
-      WHERE ur.user_id = ? AND r.NOMBRE_ROL != ?`,
-      [loginInfo[0].user_id, loginInfo[0].ROL_PRINCIPAL]
-    );
-
-    // Crear el resultado combinando estudiante info con roles adicionales
-    const resultado = [];
+    // Extraer información base del primer registro
+    const firstRow = estudianteRows[0];
     const infoBase = {
-      ...estudianteInfo[0],
-      user_name: loginInfo[0].user_name,
-      user_idrole: loginInfo[0].user_idrole,
-      ROL_PRINCIPAL: loginInfo[0].ROL_PRINCIPAL
+      SEDE: firstRow.SEDE,
+      TIPO_DOC: firstRow.TIPO_DOC,
+      DOCUMENTO_ESTUDIANTE: firstRow.DOCUMENTO_ESTUDIANTE,
+      ESTADO_MATRICULA: firstRow.ESTADO_MATRICULA,
+      NOM_PROGRAMA: firstRow.NOM_PROGRAMA,
+      SEMESTRE_MATRICULA: firstRow.SEMESTRE_MATRICULA,
+      SEMESTRE: firstRow.SEMESTRE,
+      GRUPO: firstRow.GRUPO
     };
 
-    // Si hay roles adicionales, crear una fila por cada rol adicional
-    if (additionalRoles.length > 0) {
-      additionalRoles.forEach(rol => {
-        resultado.push({
-          ...infoBase,
-          ID_ROL_ADICIONAL: rol.ID_ROL_ADICIONAL,
-          ROL_ADICIONAL: rol.ROL_ADICIONAL
-        });
-      });
-    } else {
-      // Si no hay roles adicionales, agregar solo la información base
-      resultado.push({
-        ...infoBase,
-        ID_ROL_ADICIONAL: null,
-        ROL_ADICIONAL: null
-      });
-    }
+    // Extraer materias únicas
+    const materiasMap = new Map();
+    estudianteRows.forEach(row => {
+        if (row.CODIGO_MATERIA) {
+            const key = `${row.CODIGO_MATERIA}-${row.DOCUMENTO_DOCENTE}`;
+            if (!materiasMap.has(key)) {
+                materiasMap.set(key, {
+                    CODIGO_MATERIA: row.CODIGO_MATERIA,
+                    NOMBRE_MATERIA: row.NOMBRE_MATERIA,
+                    DOCUMENTO_DOCENTE: row.DOCUMENTO_DOCENTE,
+                    NOMBRE_DOCENTE: row.NOMBRE_DOCENTE
+                });
+            }
+        }
+    });
+    const materias = Array.from(materiasMap.values());
 
-    console.log(resultado);
-    return resultado;
+    return {
+        infoBase,
+        materias
+    };
   },
 
   // MATERIAS DE ESTUDIANTE
@@ -116,136 +91,68 @@ const VistaProfileModel = {
 
   // INFORMACION DE DOCENTE
 
-  async getDocenteInfo(documento) {
+  async getDocenteAcademicInfo(documento) {
     const remotePool = await getRemotePool(); // sigedin_ies
-    const securityPool = await getSecurityPool(); // sigedin_seguridad
     
     // Consulta principal de docente desde sigedin_ies
-    const [docenteInfo] = await remotePool.query(
-      `SELECT DISTINCT
-         ai.ID_DOCENTE AS DOCUMENTO_DOCENTE,
-         ai.DOCENTE AS NOMBRE_DOCENTE,
-         ai.NOMBRE_SEDE AS SEDE,
-         ai.PERIODO
-       FROM vista_academica_insitus ai
-       WHERE ai.ID_DOCENTE = ?
-       GROUP BY 
-          ai.ID_DOCENTE,
-          ai.DOCENTE,
-          ai.NOMBRE_SEDE,
-          ai.PERIODO`,
-      [documento]
-    );
+    const docenteInfo = await remotePool.query(
+        `SELECT DISTINCT
+           ai.ID_DOCENTE AS DOCUMENTO_DOCENTE,
+           ai.DOCENTE AS NOMBRE_DOCENTE,
+           ai.NOMBRE_SEDE AS SEDE,
+           ai.PERIODO
+         FROM vista_academica_insitus ai
+         WHERE ai.ID_DOCENTE = ?
+         GROUP BY 
+            ai.ID_DOCENTE,
+            ai.DOCENTE,
+            ai.NOMBRE_SEDE,
+            ai.PERIODO`,
+        [documento]
+    ).then(([rows]) => rows);
 
-    // Consulta de datos de login desde sigedin_seguridad
-    const [loginInfo] = await securityPool.query(
-      `SELECT 
-          dl.user_name,
-          dl.user_idrole,
-          dl.role_name AS ROL_PRINCIPAL,
-          dl.user_id
-      FROM datalogin dl 
-      WHERE dl.user_username = ?`,
-      [documento]
-    );
-
-    // Si no hay información de docente o login, retornar array vacío
-    if (docenteInfo.length === 0 || loginInfo.length === 0) {
+    // Si no hay información de docente, retornar array vacío
+    if (docenteInfo.length === 0) {
       return [];
     }
 
-    // Obtener roles adicionales desde base local
-    const localPool = await getPool();
-    const [additionalRoles] = await localPool.query(
-      `SELECT 
-          r.ID AS ID_ROL_ADICIONAL,
-          r.NOMBRE_ROL AS ROL_ADICIONAL
-      FROM users_roles ur 
-      JOIN roles r ON ur.rol_id = r.ID
-      WHERE ur.user_id = ? AND r.NOMBRE_ROL != ?`,
-      [loginInfo[0].user_id, loginInfo[0].ROL_PRINCIPAL]
-    );
-
-    // Crear el resultado combinando docente info con roles adicionales
-    const resultado = [];
-    const infoBase = {
-      ...docenteInfo[0],
-      user_name: loginInfo[0].user_name,
-      user_idrole: loginInfo[0].user_idrole,
-      ROL_PRINCIPAL: loginInfo[0].ROL_PRINCIPAL
-    };
-
-    // Si hay roles adicionales, crear una fila por cada rol adicional
-    if (additionalRoles.length > 0) {
-      additionalRoles.forEach(rol => {
-        resultado.push({
-          ...infoBase,
-          ID_ROL_ADICIONAL: rol.ID_ROL_ADICIONAL,
-          ROL_ADICIONAL: rol.ROL_ADICIONAL
-        });
-      });
-    } else {
-      // Si no hay roles adicionales, agregar solo la información base
-      resultado.push({
-        ...infoBase,
-        ID_ROL_ADICIONAL: null,
-        ROL_ADICIONAL: null
-      });
-    }
-
-    return resultado;
+    return docenteInfo;
   },
 
   // MATERIAS DE DOCENTE
+  // Nota: Consulta compatible con MySQL 5.x (sin CTEs ni funciones de ventana)
 
   async getMateriasDocente(documento) {
     const remotePool = await getRemotePool();
     const [materias] = await remotePool.query(
-      `WITH ASIGNATURA_SEMESTRES AS (
-          SELECT 
-              COD_ASIGNATURA,
-              ASIGNATURA,
-              ID_DOCENTE,
-              SEMESTRE,
-              COUNT(*) AS TOTAL_ESTUDIANTES
-          FROM vista_academica_insitus
-          GROUP BY COD_ASIGNATURA, ASIGNATURA, ID_DOCENTE, SEMESTRE
-      ),
-      SEMESTRE_PREDOMINANTE AS (
-          SELECT 
-              COD_ASIGNATURA,
-              ID_DOCENTE,
-              SEMESTRE AS SEMESTRE_PREDOMINANTE,
-              ROW_NUMBER() OVER (PARTITION BY COD_ASIGNATURA, ID_DOCENTE ORDER BY COUNT(*) DESC) AS rn
-          FROM vista_academica_insitus
-          GROUP BY COD_ASIGNATURA, ID_DOCENTE, SEMESTRE
-      ),
-      PROGRAMA_PREDOMINANTE AS (
-          SELECT 
-              COD_ASIGNATURA,
-              ID_DOCENTE,
-              NOM_PROGRAMA AS PROGRAMA_PREDOMINANTE,
-              ROW_NUMBER() OVER (PARTITION BY COD_ASIGNATURA, ID_DOCENTE ORDER BY COUNT(*) DESC) AS rn
-          FROM vista_academica_insitus
-          GROUP BY COD_ASIGNATURA, ID_DOCENTE, NOM_PROGRAMA
-      )
-  
-      SELECT 
+      `SELECT 
           ai.COD_ASIGNATURA,
           ai.ASIGNATURA,
-          sp.SEMESTRE_PREDOMINANTE,
-          pp.PROGRAMA_PREDOMINANTE
+          (
+              SELECT sp.SEMESTRE 
+              FROM vista_academica_insitus sp 
+              WHERE sp.COD_ASIGNATURA = ai.COD_ASIGNATURA 
+                AND sp.ID_DOCENTE = ai.ID_DOCENTE
+              GROUP BY sp.SEMESTRE 
+              ORDER BY COUNT(*) DESC 
+              LIMIT 1
+          ) AS SEMESTRE_PREDOMINANTE,
+          (
+              SELECT pp.NOM_PROGRAMA 
+              FROM vista_academica_insitus pp 
+              WHERE pp.COD_ASIGNATURA = ai.COD_ASIGNATURA 
+                AND pp.ID_DOCENTE = ai.ID_DOCENTE
+              GROUP BY pp.NOM_PROGRAMA 
+              ORDER BY COUNT(*) DESC 
+              LIMIT 1
+          ) AS PROGRAMA_PREDOMINANTE
       FROM (
           SELECT DISTINCT COD_ASIGNATURA, ASIGNATURA, ID_DOCENTE
           FROM vista_academica_insitus
+          WHERE ID_DOCENTE = ?
       ) ai
-      LEFT JOIN SEMESTRE_PREDOMINANTE sp 
-          ON ai.COD_ASIGNATURA = sp.COD_ASIGNATURA AND ai.ID_DOCENTE = sp.ID_DOCENTE AND sp.rn = 1
-      LEFT JOIN PROGRAMA_PREDOMINANTE pp 
-          ON ai.COD_ASIGNATURA = pp.COD_ASIGNATURA AND ai.ID_DOCENTE = pp.ID_DOCENTE AND pp.rn = 1
-      WHERE (? IS NULL OR ai.ID_DOCENTE = ?)
       ORDER BY ai.ASIGNATURA`,
-      [documento, documento]
+      [documento]
     );
     return materias;
   },
@@ -255,7 +162,7 @@ const VistaProfileModel = {
   async getRolesAdicionales(userId) {
     const localPool = await getPool();
     const [additionalRoles] = await localPool.query(
-      `SELECT r.NOMBRE_ROL 
+      `SELECT r.ID, r.NOMBRE_ROL 
        FROM users_roles ur 
        JOIN ROLES r ON ur.rol_id = r.ID 
        WHERE ur.user_id = ?`,

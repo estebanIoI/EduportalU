@@ -14,7 +14,8 @@ class DocentesService {
       nombreSede,
       nomPrograma,
       semestre,
-      grupo
+      grupo,
+      idDocente
     } = filters;
 
     const docentes = await getDocentesAsignaturasModel({
@@ -24,6 +25,7 @@ class DocentesService {
       nomPrograma,
       semestre,
       grupo,
+      idDocente,
       pagination
     });
 
@@ -33,7 +35,8 @@ class DocentesService {
       nombreSede,
       nomPrograma,
       semestre,
-      grupo
+      grupo,
+      idDocente
     });
 
     return {

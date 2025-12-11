@@ -16,6 +16,27 @@ import { TipoEvaluacion, ConfiguracionEvaluacion, EstadoActivo } from "@/lib/typ
 import { configuracionEvaluacionService } from "@/services";
 import { Dispatch, SetStateAction } from "react";
 
+// Función para formatear fecha sin problemas de zona horaria
+const formatearFechaLocal = (fechaString: string): string => {
+  if (!fechaString) return "N/A";
+  
+  // Si la fecha ya está en formato YYYY-MM-DD, la parseamos directamente
+  const match = fechaString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Crear fecha usando los componentes directamente (sin zona horaria)
+    const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return fecha.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+  }
+  
+  // Fallback si el formato es diferente
+  return fechaString;
+};
+
 interface ConfiguracionViewProps {
   configuraciones: ConfiguracionEvaluacion[];
   tiposEvaluacion: TipoEvaluacion[];
@@ -98,13 +119,13 @@ export function ConfiguracionView({
                         <span className="block pl-4">
                           • Inicio:{" "}
                           <span className="font-medium">
-                            {new Date(configuracion.FECHA_INICIO).toLocaleDateString("es-ES")}
+                            {formatearFechaLocal(configuracion.FECHA_INICIO)}
                           </span>
                         </span>
                         <span className="block pl-4">
                           • Fin:{" "}
                           <span className="font-medium">
-                            {new Date(configuracion.FECHA_FIN).toLocaleDateString("es-ES")}
+                            {formatearFechaLocal(configuracion.FECHA_FIN)}
                           </span>
                         </span>
                       </p>

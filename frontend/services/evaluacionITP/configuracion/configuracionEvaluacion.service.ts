@@ -5,7 +5,8 @@ import { ConfiguracionEvaluacion, ConfiguracionEvaluacionInput, ConfiguracionEva
 export const configuracionEvaluacionService = {
   getAll: async (): Promise<ApiResponse<ConfiguracionEvaluacion[]>> => {
     try {
-      const response = await apiClient.get<ConfiguracionEvaluacion[]>('/configuracion-evaluacion');
+      // Solicitar todas las configuraciones con un límite mayor para asegurar que se obtengan todas
+      const response = await apiClient.get<ConfiguracionEvaluacion[]>('/configuracion-evaluacion?limit=50');
       return response;
     } catch (error: any) {
       throw error;

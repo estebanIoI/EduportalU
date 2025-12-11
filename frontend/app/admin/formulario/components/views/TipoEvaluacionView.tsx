@@ -11,6 +11,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  FileText,
 } from "lucide-react";
 import { TipoEvaluacion, EstadoActivo } from "@/lib/types/evaluacionInsitu";
 import { tiposEvaluacionService } from "@/services";
@@ -53,11 +54,26 @@ export function TiposEvaluacionView({
       <CardHeader>
         <CardTitle>Gestión de Tipos de Evaluación</CardTitle>
         <CardDescription>
-          Administra los tipos de evaluación disponibles en el sistema.
+          Crea y administra diferentes tipos de evaluaciones: desempeño docente, satisfacción estudiantil, evaluaciones académicas, etc.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
+          {/* Mensaje informativo si no hay tipos de evaluación */}
+          {tiposEvaluacion.length === 0 && (
+            <Card className="border-dashed border-2 border-muted">
+              <CardContent className="p-8 text-center">
+                <FileText className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="font-semibold text-lg mb-2">
+                  No hay tipos de evaluación registrados
+                </h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Crea tu primer tipo de evaluación para comenzar a diseñar formularios personalizados
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
           {tiposEvaluacion.map((tipo) => (
             <Card
               key={tipo.ID}
@@ -131,13 +147,21 @@ export function TiposEvaluacionView({
             </Card>
           ))}
 
-          <Button
-            className="w-full mt-2"
-            onClick={() => setModalTipoEvaluacion({ isOpen: true, tipo: undefined })}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Agregar Nuevo Tipo de Evaluación
-          </Button>
+          {/* Botón para agregar nuevo tipo */}
+          <Card className="border-dashed border-2 border-muted hover:border-primary/50 transition-colors cursor-pointer"
+                onClick={() => setModalTipoEvaluacion({ isOpen: true, tipo: undefined })}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-center gap-3 text-muted-foreground hover:text-primary transition-colors">
+                <div className="p-2 bg-primary/10 rounded-full">
+                  <Plus className="h-5 w-5" />
+                </div>
+                <div className="text-center sm:text-left">
+                  <p className="font-medium">Crear Nuevo Tipo de Evaluación</p>
+                  <p className="text-xs">Satisfacción, Desempeño, Autoevaluación, etc.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </CardContent>
     </Card>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { CardFooter } from "@/components/ui/card";
 import type { VideoFormat } from '../types/types';
+import { DevelopersButton } from './DevelopersButton';
 
 interface LoginFooterProps {
   videoFormat: VideoFormat;
@@ -31,6 +32,8 @@ export const LoginFooter: React.FC<LoginFooterProps> = ({
         v2025-2
       </div>
 
+      <DevelopersButton />
+      
       <footer className="text-center text-xs text-gray-500 w-full">
         © {new Date().getFullYear()} Institución Universitaria del Putumayo
       </footer>

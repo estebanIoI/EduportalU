@@ -154,17 +154,33 @@ export function ModalTipoEvaluacion({
         <Card className="border-0 shadow-none bg-muted/20">
           <CardContent className="p-5">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Ejemplos sugeridos - Solo mostrar al crear nuevo */}
+              {!tipo && (
+                <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                  <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                    💡 Ejemplos de tipos de evaluación:
+                  </p>
+                  <ul className="text-xs text-blue-800 dark:text-blue-200 space-y-1 ml-4 list-disc">
+                    <li><strong>Evaluación In Situ:</strong> Evaluación del desempeño docente en el aula</li>
+                    <li><strong>Satisfacción Estudiantil:</strong> Encuesta de satisfacción con los servicios académicos</li>
+                    <li><strong>Evaluación 360°:</strong> Evaluación integral desde múltiples perspectivas</li>
+                    <li><strong>Autoevaluación Docente:</strong> Reflexión del docente sobre su práctica pedagógica</li>
+                    <li><strong>Evaluación de Infraestructura:</strong> Valoración de instalaciones y recursos</li>
+                  </ul>
+                </div>
+              )}
+
               {/* Campo Nombre */}
               <div className="space-y-3">
                 <Label htmlFor="nombre" className="text-sm font-medium flex items-center gap-2">
                   <FileText className="h-4 w-4 text-primary" />
-                  Nombre del Tipo
+                  Nombre del Tipo de Evaluación
                 </Label>
                 <Input
                   id="nombre"
                   value={formData.NOMBRE}
                   onChange={(e) => handleInputChange("NOMBRE", e.target.value)}
-                  placeholder="Ej. Evaluación de Desempeño Técnico"
+                  placeholder="Ej. Evaluación de Satisfacción Estudiantil"
                   className={`transition-colors ${errors.NOMBRE ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   required
                 />
@@ -180,13 +196,13 @@ export function ModalTipoEvaluacion({
               <div className="space-y-3">
                 <Label htmlFor="descripcion" className="text-sm font-medium flex items-center gap-2">
                   <Edit3 className="h-4 w-4 text-primary" />
-                  Descripción
+                  Descripción Detallada
                 </Label>
                 <Textarea
                   id="descripcion"
                   value={formData.DESCRIPCION}
                   onChange={(e) => handleInputChange("DESCRIPCION", e.target.value)}
-                  placeholder="Describe el propósito, alcance y características principales de este tipo de evaluación..."
+                  placeholder="Describe el propósito y características de este tipo de evaluación. Ej: Instrumento para medir la satisfacción de los estudiantes con los servicios académicos, infraestructura y metodologías de enseñanza..."
                   rows={4}
                   className={`resize-none transition-colors ${errors.DESCRIPCION ? 'border-destructive focus-visible:ring-destructive' : ''}`}
                   required

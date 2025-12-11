@@ -74,13 +74,19 @@ export const setupResponseInterceptors = (apiInstance: AxiosInstance) => {
         const retryCount = originalRequest._retryCount;
 
         if (retryCount <= API_CONFIG.retryAttempts) {
-          console.log(`🔄 Reintentando request (${retryCount}/${API_CONFIG.retryAttempts})`);
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`🔄 Reintentando request (${retryCount}/${API_CONFIG.retryAttempts}) - ${originalRequest.url}`);
+          }
           
-          await new Promise(resolve => 
-            setTimeout(resolve, API_CONFIG.retryDelay * retryCount)
-          );
+          // Backoff exponencial: 1s, 2s, 4s...
+          const delay = API_CONFIG.retryDelay * Math.pow(2, retryCount - 1);
+          await new Promise(resolve => setTimeout(resolve, delay));
           
           return apiInstance(originalRequest);
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`❌ Máximo de reintentos alcanzado para ${originalRequest.url}`);
+          }
         }
       }
 
@@ -128,20 +134,37 @@ export const setupResponseInterceptors = (apiInstance: AxiosInstance) => {
 // Función para manejar errores de API - actualizada para tu backend
 const handleApiError = (error: AxiosError<ApiError>): Promise<ApiError> => {
   const errorData = error.response?.data;
-  const errorMessage = errorData?.message || 
-                      error.message || 
-                      'Ha ocurrido un error inesperado';
+  let errorMessage = 'Ha ocurrido un error inesperado';
+  
+  // Manejar diferentes tipos de errores
+  if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+    errorMessage = 'El servidor tardó demasiado en responder. Por favor, intenta nuevamente.';
+  } else if (error.code === 'ERR_NETWORK' || !error.response) {
+    errorMessage = 'No se pudo conectar con el servidor. Verifica tu conexión a internet.';
+  } else if (error.response?.status === 401) {
+    errorMessage = 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
+  } else if (error.response?.status === 403) {
+    errorMessage = 'No tienes permisos para realizar esta acción.';
+  } else if (error.response?.status === 404) {
+    errorMessage = 'El recurso solicitado no fue encontrado.';
+  } else if (error.response?.status === 500) {
+    errorMessage = 'Error interno del servidor. Por favor, contacta al administrador.';
+  } else if (errorData?.message) {
+    errorMessage = errorData.message;
+  }
 
-  // Log detallado del error
-  console.error('🚨 Error en API:', {
-    url: error.config?.url,
-    method: error.config?.method?.toUpperCase(),
-    status: error.response?.status,
-    statusText: error.response?.statusText,
-    message: errorMessage,
-    error: errorData?.error,
-    timestamp: new Date().toISOString(),
-  });
+  // Log detallado del error en desarrollo
+  if (process.env.NODE_ENV === 'development') {
+    console.error('🚨 Error en API:', {
+      url: error.config?.url,
+      method: error.config?.method?.toUpperCase(),
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      message: errorMessage,
+      error: errorData?.error || error.code,
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   // Crear error tipado según tu estructura de backend
   const apiError: ApiError = {

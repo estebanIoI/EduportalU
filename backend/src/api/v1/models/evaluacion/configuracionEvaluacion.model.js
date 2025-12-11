@@ -14,7 +14,11 @@ const ConfiguracionEvaluacion = {
           TE.DESCRIPCION AS TIPO_EVALUACION_DESCRIPCION,
           DATE_FORMAT(CE.FECHA_INICIO, '%Y-%m-%d') AS FECHA_INICIO,
           DATE_FORMAT(CE.FECHA_FIN,   '%Y-%m-%d') AS FECHA_FIN, 
-          CE.ACTIVO 
+          CE.ACTIVO,
+          CE.ES_EVALUACION_DOCENTE,
+          CE.TITULO,
+          CE.INSTRUCCIONES,
+          CE.URL_FORMULARIO
         FROM CONFIGURACION_EVALUACION CE
         JOIN TIPOS_EVALUACIONES TE ON CE.TIPO_EVALUACION_ID = TE.ID
       `;
@@ -86,7 +90,11 @@ const ConfiguracionEvaluacion = {
         TE.DESCRIPCION as TIPO_EVALUACION_DESCRIPCION,
         DATE_FORMAT(CE.FECHA_INICIO, '%Y-%m-%d') AS FECHA_INICIO,
         DATE_FORMAT(CE.FECHA_FIN,   '%Y-%m-%d') AS FECHA_FIN,  
-        CE.ACTIVO 
+        CE.ACTIVO,
+        CE.ES_EVALUACION_DOCENTE,
+        CE.TITULO,
+        CE.INSTRUCCIONES,
+        CE.URL_FORMULARIO
       FROM CONFIGURACION_EVALUACION CE
       JOIN TIPOS_EVALUACIONES TE ON CE.TIPO_EVALUACION_ID = TE.ID
       WHERE CE.ID = ?`, [id]);
@@ -99,11 +107,44 @@ const ConfiguracionEvaluacion = {
   createConfiguracion: async (configuracionData) => {
     try {
       const pool = getPool();
-      const { TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO } = configuracionData;
+      const { 
+        TIPO_EVALUACION_ID, 
+        FECHA_INICIO, 
+        FECHA_FIN, 
+        ACTIVO,
+        ES_EVALUACION_DOCENTE = true,
+        TITULO = null,
+        INSTRUCCIONES = null,
+        URL_FORMULARIO = null
+      } = configuracionData;
+      
+      // Log detallado para debug
+      console.log('🔍 CREATE - Datos recibidos:');
+      console.log('   TIPO_EVALUACION_ID:', TIPO_EVALUACION_ID);
+      console.log('   FECHA_INICIO:', FECHA_INICIO, 'tipo:', typeof FECHA_INICIO);
+      console.log('   FECHA_FIN:', FECHA_FIN, 'tipo:', typeof FECHA_FIN);
+      console.log('   ACTIVO:', ACTIVO);
+      console.log('   ES_EVALUACION_DOCENTE:', ES_EVALUACION_DOCENTE);
+      console.log('   TITULO:', TITULO);
+      console.log('   INSTRUCCIONES:', INSTRUCCIONES);
+      console.log('   URL_FORMULARIO:', URL_FORMULARIO);
+      
       const [result] = await pool.query(
-        'INSERT INTO CONFIGURACION_EVALUACION (TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO) VALUES (?, ?, ?, ?)',
-        [TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO]
+        `INSERT INTO CONFIGURACION_EVALUACION 
+        (TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO, ES_EVALUACION_DOCENTE, TITULO, INSTRUCCIONES, URL_FORMULARIO) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO, ES_EVALUACION_DOCENTE, TITULO, INSTRUCCIONES, URL_FORMULARIO]
       );
+      
+      // Verificar qué se guardó realmente
+      const [verificacion] = await pool.query(
+        `SELECT ID, TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO, 
+        ES_EVALUACION_DOCENTE, TITULO, INSTRUCCIONES, URL_FORMULARIO 
+        FROM CONFIGURACION_EVALUACION WHERE ID = ?`,
+        [result.insertId]
+      );
+      console.log('✅ Datos guardados en BD:', verificacion[0]);
+      
       return { id: result.insertId, ...configuracionData };
     } catch (error) {
       throw error;
@@ -113,11 +154,46 @@ const ConfiguracionEvaluacion = {
   updateConfiguracion: async (id, configuracionData) => {
     try {
       const pool = getPool();
-      const { TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO } = configuracionData;
+      const { 
+        TIPO_EVALUACION_ID, 
+        FECHA_INICIO, 
+        FECHA_FIN, 
+        ACTIVO,
+        ES_EVALUACION_DOCENTE = true,
+        TITULO = null,
+        INSTRUCCIONES = null,
+        URL_FORMULARIO = null
+      } = configuracionData;
+      
+      // Log detallado para debug
+      console.log('🔍 UPDATE - Datos recibidos:');
+      console.log('   ID:', id);
+      console.log('   TIPO_EVALUACION_ID:', TIPO_EVALUACION_ID);
+      console.log('   FECHA_INICIO:', FECHA_INICIO, 'tipo:', typeof FECHA_INICIO);
+      console.log('   FECHA_FIN:', FECHA_FIN, 'tipo:', typeof FECHA_FIN);
+      console.log('   ACTIVO:', ACTIVO);
+      console.log('   ES_EVALUACION_DOCENTE:', ES_EVALUACION_DOCENTE);
+      console.log('   TITULO:', TITULO);
+      console.log('   INSTRUCCIONES:', INSTRUCCIONES);
+      console.log('   URL_FORMULARIO:', URL_FORMULARIO);
+      
       await pool.query(
-        'UPDATE CONFIGURACION_EVALUACION SET TIPO_EVALUACION_ID = ?, FECHA_INICIO = ?, FECHA_FIN = ?, ACTIVO = ? WHERE ID = ?',
-        [TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO, id]
+        `UPDATE CONFIGURACION_EVALUACION 
+        SET TIPO_EVALUACION_ID = ?, FECHA_INICIO = ?, FECHA_FIN = ?, ACTIVO = ?,
+        ES_EVALUACION_DOCENTE = ?, TITULO = ?, INSTRUCCIONES = ?, URL_FORMULARIO = ?
+        WHERE ID = ?`,
+        [TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO, ES_EVALUACION_DOCENTE, TITULO, INSTRUCCIONES, URL_FORMULARIO, id]
       );
+      
+      // Verificar qué se guardó realmente
+      const [verificacion] = await pool.query(
+        `SELECT ID, TIPO_EVALUACION_ID, FECHA_INICIO, FECHA_FIN, ACTIVO, 
+        ES_EVALUACION_DOCENTE, TITULO, INSTRUCCIONES, URL_FORMULARIO 
+        FROM CONFIGURACION_EVALUACION WHERE ID = ?`,
+        [id]
+      );
+      console.log('✅ Datos guardados en BD:', verificacion[0]);
+      
       return { id, ...configuracionData };
     } catch (error) {
       throw error;
@@ -137,12 +213,26 @@ const ConfiguracionEvaluacion = {
   updateEstado: async (id, activo) => {
     try {
       const pool = getPool();
+      
+      console.log('🔄 Actualizando estado de configuración:');
+      console.log('   ID:', id);
+      console.log('   Nuevo estado ACTIVO:', activo);
+      
       await pool.query(
         'UPDATE CONFIGURACION_EVALUACION SET ACTIVO = ? WHERE ID = ?',
         [activo, id]
       );
+      
+      // Verificar que el cambio se aplicó
+      const [verificacion] = await pool.query(
+        'SELECT ID, ACTIVO FROM CONFIGURACION_EVALUACION WHERE ID = ?',
+        [id]
+      );
+      console.log('✅ Estado actualizado en BD:', verificacion[0]);
+      
       return { id, activo };
     } catch (error) {
+      console.error('❌ Error al actualizar estado:', error);
       throw error;
     }
   },

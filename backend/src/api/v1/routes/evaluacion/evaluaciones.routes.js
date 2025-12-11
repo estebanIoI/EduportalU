@@ -10,7 +10,11 @@ const {
   createEvaluacionU,
   getEvaluacionesByEstudiante,
   getEvaluacionesByEstudianteByConfiguracion,
-  getEvaluacionesByDocente
+  getEvaluacionesByDocente,
+  getEvaluacionesByEstudianteAsignatura,
+  getResultadosEvaluacionDocente,
+  getAutoevaluacionDocente,
+  createAutoevaluacionDocente
 } = require('../../controllers/evaluacion/evaluaciones.controller');
 
 const { verifyToken, checkRole } = require('../../middlewares/userAuth.middleware');
@@ -26,6 +30,10 @@ router.put('/:id', verifyToken, updateEvaluacion);
 router.delete('/:id', verifyToken, deleteEvaluacion);
 router.get('/estudiante/:documentoEstudiante', getEvaluacionesByEstudiante);
 router.get('/estudiante/:documentoEstudiante/configuracion/:configuracionId', getEvaluacionesByEstudianteByConfiguracion);
+router.get('/estudiante/:documentoEstudiante/asignatura/:codigoAsignatura', getEvaluacionesByEstudianteAsignatura);
 router.get('/docente/:documentoDocente', getEvaluacionesByDocente);
+router.get('/docente/:documentoDocente/resultados', verifyToken, getResultadosEvaluacionDocente);
+router.get('/docente/:documentoDocente/autoevaluacion', verifyToken, getAutoevaluacionDocente);
+router.post('/docente/:documentoDocente/autoevaluacion', verifyToken, createAutoevaluacionDocente);
 
 module.exports = router;

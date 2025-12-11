@@ -5,7 +5,8 @@ import { EscalaValoracion } from '@/lib/types/evaluacionInsitu';
 export const escalasValoracionService = {
   getAll: async (): Promise<ApiResponse<EscalaValoracion[]>> => {
     try {
-      const response = await apiClient.get<EscalaValoracion[]>('/escala-valoracion');
+      // Solicitar todas las escalas con un límite mayor para asegurar que se obtengan todas
+      const response = await apiClient.get<EscalaValoracion[]>('/escala-valoracion?limit=50');
       return response;
     } catch (error: any) {
       throw error;

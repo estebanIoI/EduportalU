@@ -78,3 +78,46 @@ export interface ApiResponse<T = any> {
   success: boolean;
   data: T;
 }
+
+// Tipos para Estadísticas por Programa
+export interface EstadisticaProgramaResponse {
+  programa: string;
+  programaCorto?: string;
+  completadas: number;
+  pendientes: number;
+  total: number;
+  porcentajeCompletado: number;
+  totalEstudiantes?: number;
+}
+
+export interface EstudianteEvaluacionResponse {
+  id: string;
+  nombre: string;
+  codigo: string;
+  estado: "completada" | "pendiente";
+  fechaCompletado?: string | null;
+  evaluacionesCompletadas?: number;
+  evaluacionesTotales?: number;
+  programa?: string;
+}
+
+export interface DocenteProgramaResponse {
+  id: string;
+  nombre: string;
+  promedio: string;
+  estado: "excelente" | "bueno" | "regular" | "necesita_mejora" | "sin_evaluar";
+  evaluacionesRealizadas: number;
+  evaluacionesEsperadas: number;
+  porcentajeEvaluado: number;
+  totalEstudiantes: number;
+  totalAsignaturas: number;
+  posicion: number;
+  aspectos?: AspectoProgramaResponse[];
+  aspectosAMejorar?: AspectoProgramaResponse[];
+}
+
+export interface AspectoProgramaResponse {
+  aspecto: string;
+  descripcion: string;
+  promedio: string;
+}

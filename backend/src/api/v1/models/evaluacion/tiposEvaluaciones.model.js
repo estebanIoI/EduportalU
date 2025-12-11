@@ -6,7 +6,16 @@ const TiposEvaluacion = {
     try {
       const pool = getPool();
       let query = `
-        SELECT ce.ID, te.NOMBRE AS NOMBRE, ce.FECHA_INICIO, ce.FECHA_FIN, ce.ACTIVO 
+        SELECT 
+          ce.ID, 
+          te.NOMBRE AS NOMBRE, 
+          ce.FECHA_INICIO, 
+          ce.FECHA_FIN, 
+          ce.ACTIVO,
+          ce.ES_EVALUACION_DOCENTE,
+          ce.TITULO,
+          ce.INSTRUCCIONES,
+          ce.URL_FORMULARIO
         FROM CONFIGURACION_EVALUACION ce 
         JOIN TIPOS_EVALUACIONES te ON ce.TIPO_EVALUACION_ID = te.ID 
         WHERE ce.ID = ?`;
@@ -52,10 +61,34 @@ const TiposEvaluacion = {
       
       const [valoraciones] = await pool.query(query, [configuracionId]);
       
+      // Obtener las preguntas relacionadas con la configuración a través de configuracion_pregunta
+      let preguntas = [];
+      try {
+        query = `
+          SELECT cp.ID, cp.PREGUNTA_ID, p.TEXTO, p.TIPO_PREGUNTA, p.OPCIONES, cp.ORDEN, cp.ACTIVO 
+          FROM CONFIGURACION_PREGUNTAS cp 
+          JOIN PREGUNTAS p ON cp.PREGUNTA_ID = p.ID 
+          WHERE cp.CONFIGURACION_EVALUACION_ID = ?`;
+        
+        // Filtrar las preguntas solo si el rol incluye 'Estudiante'
+        if (roles.includes('Estudiante')) {
+          query += " AND cp.ACTIVO = TRUE";
+        }
+        query += " ORDER BY cp.ORDEN";
+        
+        const [preguntasResult] = await pool.query(query, [configuracionId]);
+        preguntas = preguntasResult;
+      } catch (error) {
+        // Si las tablas de preguntas no existen, continuar sin preguntas
+        console.log('Advertencia: No se pudieron cargar las preguntas:', error.message);
+        preguntas = [];
+      }
+      
       return {
         configuracion: configuracion[0],
         aspectos,
-        valoraciones
+        valoraciones,
+        preguntas
       };
     } catch (error) {
       throw error;

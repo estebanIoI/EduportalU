@@ -12,14 +12,16 @@ const configuracionEvaluacionSchema = require('../../validations/evaluacion/conf
 const { verifyToken, checkRole } = require('../../middlewares/userAuth.middleware');
 const validate = require('../../middlewares/validate');
 const pagination = require('../../middlewares/pagination');
+const { ADMIN_ROLES } = require('../../../../constants/roles');
 
 const router = express.Router();
 
-router.patch('/:id/estado', updateEstadoConfiguracion);
-router.get('/', pagination({ defaultLimit: 10, maxLimit: 50 }), verifyToken, checkRole(['Admin', 'Estudiante']), getConfiguraciones);
-router.post('/', verifyToken, checkRole(['Admin']), validate(configuracionEvaluacionSchema), createConfiguracion);
-router.get('/:id', verifyToken, checkRole(['Admin']), getConfiguracionById);
-router.put('/:id', verifyToken, checkRole(['Admin']), validate(configuracionEvaluacionSchema), updateConfiguracion);
-router.delete('/:id', verifyToken, checkRole(['Admin']), deleteConfiguracion);
+// Rutas con autenticación y control de acceso
+router.patch('/:id/estado', verifyToken, checkRole(ADMIN_ROLES), updateEstadoConfiguracion);
+router.get('/', pagination({ defaultLimit: 10, maxLimit: 50 }), verifyToken, checkRole([...ADMIN_ROLES, 'Estudiante']), getConfiguraciones);
+router.post('/', verifyToken, checkRole(ADMIN_ROLES), validate(configuracionEvaluacionSchema), createConfiguracion);
+router.get('/:id', verifyToken, checkRole(ADMIN_ROLES), getConfiguracionById);
+router.put('/:id', verifyToken, checkRole(ADMIN_ROLES), validate(configuracionEvaluacionSchema), updateConfiguracion);
+router.delete('/:id', verifyToken, checkRole(ADMIN_ROLES), deleteConfiguracion);
 
 module.exports = router;

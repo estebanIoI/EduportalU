@@ -12,11 +12,11 @@ export const LoginHeader: React.FC<LoginHeaderProps> = ({ videoFormat }) => {
     <CardHeader className="text-center">
       <div className="flex justify-center">
         <img
-          src={LOGOS.main}
+          src={LOGOS.full}
           alt="Logo Institución Universitaria del Putumayo"
           className={`${
             videoFormat === "short"
-              ? "h-64 w-auto sm:h-20 md:h-24 lg:h-64"
+              ? "h-74 w-auto sm:h-20 md:h-24 lg:h-74"
               : "h-64 w-auto sm:h-20 md:h-24 lg:h-64"
           } object-contain transform hover:scale-105 transition-transform duration-300`}
           onError={(e) => {

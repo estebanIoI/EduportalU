@@ -15,7 +15,7 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
-    domains: ['62.146.231.110'],
+    domains: ['62.146.231.110', 'virtual.itp.edu.co', 'itp.edu.co'],
   },
   output: 'standalone',
   experimental: {

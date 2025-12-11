@@ -149,11 +149,12 @@ const processAcademicDataForStats = (academicData) => {
   academicData.forEach(row => {
     estudiantes.add(row.ID_ESTUDIANTE);
     docentes.add(row.ID_DOCENTE);
-    const evalKey = `${row.ID_ESTUDIANTE}-${row.COD_ASIGNATURA}`;
+    // Asegurar que las claves sean strings para consistencia
+    const evalKey = `${String(row.ID_ESTUDIANTE)}-${String(row.COD_ASIGNATURA)}`;
     evaluaciones.add(evalKey);
     estudianteAsignatura.push({
-      estudiante: row.ID_ESTUDIANTE,
-      asignatura: row.COD_ASIGNATURA,
+      estudiante: String(row.ID_ESTUDIANTE),
+      asignatura: String(row.COD_ASIGNATURA),
       docente: row.ID_DOCENTE,
       key: evalKey
     });
@@ -189,7 +190,8 @@ const getCompletedEvaluations = async (idConfiguracion, evaluaciones) => {
   const evaluacionesPendientes = new Set();
   
   evaluacionesData.forEach(row => {
-    const evalKey = `${row.DOCUMENTO_ESTUDIANTE}-${row.CODIGO_MATERIA}`;
+    // Asegurar que las claves sean strings para consistencia
+    const evalKey = `${String(row.DOCUMENTO_ESTUDIANTE)}-${String(row.CODIGO_MATERIA)}`;
     if (row.detalle_id) {
       evaluacionesCompletadas.add(evalKey);
     }
@@ -1015,6 +1017,461 @@ const getComparativaDocente = async ({ idConfiguracion, idDocente, periodo, nomb
 // EXPORTACIONES
 // ======================================
 
+/**
+ * Obtiene estadísticas de evaluaciones agrupadas por programa
+ */
+const getEstadisticasPorPrograma = async ({ idConfiguracion, periodo, nombreSede, semestre, grupo }) => {
+  try {
+    const filters = { periodo, nombreSede, semestre, grupo };
+    
+    // Obtener datos académicos incluyendo NOM_PROGRAMA
+    const vistaData = await getAcademicData(filters, [
+      'ID_ESTUDIANTE', 'COD_ASIGNATURA', 'NOM_PROGRAMA'
+    ]);
+
+    if (vistaData.length === 0) {
+      console.log('No se encontraron datos para estadísticas por programa');
+      return [];
+    }
+
+    console.log(`Procesando ${vistaData.length} registros para estadísticas por programa`);
+
+    // Agrupar por programa
+    const programasMap = new Map();
+
+    vistaData.forEach(row => {
+      const programa = row.NOM_PROGRAMA || 'Sin Programa';
+      
+      if (!programasMap.has(programa)) {
+        programasMap.set(programa, {
+          programa,
+          evaluaciones: new Set(),
+          estudiantes: new Set()
+        });
+      }
+      
+      const data = programasMap.get(programa);
+      const evalKey = `${row.ID_ESTUDIANTE}-${row.COD_ASIGNATURA}`;
+      data.evaluaciones.add(evalKey);
+      data.estudiantes.add(row.ID_ESTUDIANTE);
+    });
+
+    // Obtener evaluaciones completadas
+    const todasEvaluaciones = new Set();
+    vistaData.forEach(row => {
+      todasEvaluaciones.add(`${row.ID_ESTUDIANTE}-${row.COD_ASIGNATURA}`);
+    });
+
+    const pool = await getPool();
+    
+    // Consultar evaluaciones completadas en la base de datos local
+    const evaluacionesQuery = `
+      SELECT 
+        e.DOCUMENTO_ESTUDIANTE,
+        e.CODIGO_MATERIA,
+        ed.ID as detalle_id
+      FROM evaluaciones e
+      LEFT JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
+      WHERE e.ID_CONFIGURACION = ?
+        AND CONCAT(e.DOCUMENTO_ESTUDIANTE, '-', e.CODIGO_MATERIA) IN (${Array(todasEvaluaciones.size).fill('?').join(',')})
+    `;
+    
+    const evaluacionesParams = [idConfiguracion, ...Array.from(todasEvaluaciones)];
+    const [evaluacionesData] = await pool.query(evaluacionesQuery, evaluacionesParams);
+    
+    // Crear set de evaluaciones completadas (con detalle)
+    const evaluacionesCompletadas = new Set();
+    evaluacionesData.forEach(row => {
+      if (row.detalle_id) {
+        evaluacionesCompletadas.add(`${row.DOCUMENTO_ESTUDIANTE}-${row.CODIGO_MATERIA}`);
+      }
+    });
+
+    console.log(`Evaluaciones completadas: ${evaluacionesCompletadas.size}`);
+
+    // Calcular estadísticas por programa
+    const estadisticas = Array.from(programasMap.values()).map(data => {
+      const total = data.evaluaciones.size;
+      let completadas = 0;
+      
+      data.evaluaciones.forEach(evalKey => {
+        if (evaluacionesCompletadas.has(evalKey)) {
+          completadas++;
+        }
+      });
+      
+      const pendientes = total - completadas;
+      // Calcular porcentaje con un decimal para valores pequeños
+      const porcentajeRaw = total > 0 ? (completadas / total) * 100 : 0;
+      const porcentajeCompletado = porcentajeRaw < 1 && porcentajeRaw > 0 
+        ? parseFloat(porcentajeRaw.toFixed(1)) 
+        : Math.round(porcentajeRaw);
+      
+      // Generar nombre corto del programa
+      const programaCorto = data.programa.length > 25 
+        ? data.programa.substring(0, 23) + '...' 
+        : data.programa;
+      
+      return {
+        programa: data.programa,
+        programaCorto,
+        completadas,
+        pendientes,
+        total,
+        porcentajeCompletado,
+        totalEstudiantes: data.estudiantes.size
+      };
+    });
+
+    // Ordenar por total descendente
+    estadisticas.sort((a, b) => b.total - a.total);
+
+    console.log(`Estadísticas generadas para ${estadisticas.length} programas`);
+    return estadisticas;
+
+  } catch (error) {
+    console.error('Error en getEstadisticasPorPrograma:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene los estudiantes de un programa con su estado de evaluación
+ */
+const getEstudiantesPorPrograma = async ({ idConfiguracion, periodo, nombreSede, semestre, grupo, nomPrograma, estado }) => {
+  try {
+    const filters = { periodo, nombreSede, semestre, grupo, nomPrograma };
+    
+    // Obtener datos académicos del programa específico con columnas correctas
+    const remotePool = await getRemotePool();
+    const whereClause = buildWhereClause(filters, 'va');
+    
+    const query = `
+      SELECT 
+        va.ID_ESTUDIANTE, 
+        CONCAT(va.PRIMER_NOMBRE, ' ', IFNULL(va.SEGUNDO_NOMBRE, ''), ' ', va.PRIMER_APELLIDO, ' ', IFNULL(va.SEGUNDO_APELLIDO, '')) AS NOMBRE_ESTUDIANTE,
+        va.COD_ASIGNATURA, 
+        va.NOM_PROGRAMA
+      FROM vista_academica_insitus va
+      ${whereClause.clause}
+    `;
+    
+    const [vistaData] = await remotePool.query(query, whereClause.params);
+
+    if (vistaData.length === 0) {
+      console.log('No se encontraron estudiantes para el programa:', nomPrograma);
+      return [];
+    }
+
+    console.log(`Procesando ${vistaData.length} registros para estudiantes del programa: ${nomPrograma}`);
+
+    // Crear mapa de estudiantes con sus evaluaciones
+    const estudiantesMap = new Map();
+
+    vistaData.forEach(row => {
+      const idEstudiante = String(row.ID_ESTUDIANTE);
+      
+      if (!estudiantesMap.has(idEstudiante)) {
+        estudiantesMap.set(idEstudiante, {
+          id: idEstudiante,
+          nombre: row.NOMBRE_ESTUDIANTE ? row.NOMBRE_ESTUDIANTE.trim().replace(/\s+/g, ' ') : `Estudiante ${idEstudiante}`,
+          codigo: idEstudiante,
+          evaluaciones: new Set(),
+          programa: row.NOM_PROGRAMA
+        });
+      }
+      
+      const estudiante = estudiantesMap.get(idEstudiante);
+      estudiante.evaluaciones.add(`${idEstudiante}-${row.COD_ASIGNATURA}`);
+    });
+
+    // Obtener evaluaciones completadas de la base de datos local
+    const todasEvaluaciones = new Set();
+    vistaData.forEach(row => {
+      todasEvaluaciones.add(`${row.ID_ESTUDIANTE}-${row.COD_ASIGNATURA}`);
+    });
+
+    // Si no hay evaluaciones esperadas, retornar todos como pendientes
+    if (todasEvaluaciones.size === 0) {
+      console.log('No hay evaluaciones esperadas para el programa');
+      const estudiantes = Array.from(estudiantesMap.values()).map(est => ({
+        id: est.id,
+        nombre: est.nombre,
+        codigo: est.codigo,
+        estado: 'pendiente',
+        fechaCompletado: null,
+        evaluacionesCompletadas: 0,
+        evaluacionesTotales: 0,
+        programa: est.programa
+      }));
+      
+      if (estado === 'completadas' || estado === 'completada') {
+        return [];
+      }
+      return estudiantes;
+    }
+
+    const pool = await getPool();
+    
+    // Crear placeholders seguros para la consulta
+    const evaluacionesArray = Array.from(todasEvaluaciones);
+    const placeholders = evaluacionesArray.map(() => '?').join(',');
+    
+    const evaluacionesQuery = `
+      SELECT 
+        e.DOCUMENTO_ESTUDIANTE,
+        e.CODIGO_MATERIA,
+        e.FECHA_CREACION,
+        ed.ID as detalle_id
+      FROM evaluaciones e
+      LEFT JOIN evaluacion_detalle ed ON e.ID = ed.EVALUACION_ID
+      WHERE e.ID_CONFIGURACION = ?
+        AND CONCAT(e.DOCUMENTO_ESTUDIANTE, '-', e.CODIGO_MATERIA) IN (${placeholders})
+    `;
+    
+    const evaluacionesParams = [idConfiguracion, ...evaluacionesArray];
+    
+    console.log('Query params:', { idConfiguracion, totalEvaluaciones: evaluacionesArray.length });
+    
+    const [evaluacionesData] = await pool.query(evaluacionesQuery, evaluacionesParams);
+    
+    console.log(`Evaluaciones encontradas en BD: ${evaluacionesData.length}`);
+    
+    // Crear mapas de evaluaciones completadas y sus fechas
+    const evaluacionesCompletadas = new Map();
+    evaluacionesData.forEach(row => {
+      if (row.detalle_id) {
+        const evalKey = `${row.DOCUMENTO_ESTUDIANTE}-${row.CODIGO_MATERIA}`;
+        evaluacionesCompletadas.set(evalKey, row.FECHA_CREACION);
+      }
+    });
+
+    console.log(`Evaluaciones completadas (con detalle): ${evaluacionesCompletadas.size}`);
+
+    // Procesar estudiantes y determinar su estado
+    const estudiantes = Array.from(estudiantesMap.values()).map(est => {
+      const totalEvaluaciones = est.evaluaciones.size;
+      let completadas = 0;
+      let ultimaFecha = null;
+
+      est.evaluaciones.forEach(evalKey => {
+        if (evaluacionesCompletadas.has(evalKey)) {
+          completadas++;
+          const fecha = evaluacionesCompletadas.get(evalKey);
+          if (fecha && (!ultimaFecha || fecha > ultimaFecha)) {
+            ultimaFecha = fecha;
+          }
+        }
+      });
+
+      // Un estudiante está "completado" si completó TODAS sus evaluaciones
+      const estadoEstudiante = (completadas === totalEvaluaciones && totalEvaluaciones > 0) 
+        ? 'completada' 
+        : 'pendiente';
+
+      // Formatear fecha de forma segura
+      let fechaFormateada = null;
+      if (estadoEstudiante === 'completada' && ultimaFecha) {
+        try {
+          if (ultimaFecha instanceof Date) {
+            fechaFormateada = ultimaFecha.toISOString().split('T')[0];
+          } else if (typeof ultimaFecha === 'string') {
+            fechaFormateada = new Date(ultimaFecha).toISOString().split('T')[0];
+          }
+        } catch (e) {
+          console.error('Error al formatear fecha:', e);
+          fechaFormateada = null;
+        }
+      }
+
+      return {
+        id: est.id,
+        nombre: est.nombre,
+        codigo: est.codigo,
+        estado: estadoEstudiante,
+        fechaCompletado: fechaFormateada,
+        evaluacionesCompletadas: completadas,
+        evaluacionesTotales: totalEvaluaciones,
+        programa: est.programa
+      };
+    });
+
+    // Filtrar por estado si se especifica
+    let estudiantesFiltrados = estudiantes;
+    if (estado === 'completadas' || estado === 'completada') {
+      estudiantesFiltrados = estudiantes.filter(e => e.estado === 'completada');
+    } else if (estado === 'pendientes' || estado === 'pendiente') {
+      estudiantesFiltrados = estudiantes.filter(e => e.estado === 'pendiente');
+    }
+
+    // Ordenar: completados primero por fecha, pendientes por nombre
+    estudiantesFiltrados.sort((a, b) => {
+      if (a.estado === 'completada' && b.estado === 'pendiente') return -1;
+      if (a.estado === 'pendiente' && b.estado === 'completada') return 1;
+      if (a.estado === 'completada' && b.estado === 'completada') {
+        return new Date(b.fechaCompletado) - new Date(a.fechaCompletado);
+      }
+      return a.nombre.localeCompare(b.nombre);
+    });
+
+    console.log(`Estudiantes procesados: ${estudiantesFiltrados.length} (${estado || 'todos'})`);
+    return estudiantesFiltrados;
+
+  } catch (error) {
+    console.error('Error en getEstudiantesPorPrograma:', error);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene los docentes de un programa con su estado de evaluación y rendimiento
+ */
+const getDocentesPorPrograma = async ({ idConfiguracion, periodo, nombreSede, semestre, grupo, nomPrograma }) => {
+  try {
+    const filters = { periodo, nombreSede, semestre, grupo, nomPrograma };
+    
+    // Obtener datos académicos del programa específico
+    const vistaData = await getAcademicData(filters, [
+      'ID_DOCENTE', 'DOCENTE', 'ID_ESTUDIANTE', 'COD_ASIGNATURA',
+      'PERIODO', 'NOMBRE_SEDE', 'NOM_PROGRAMA', 'SEMESTRE', 'GRUPO'
+    ]);
+
+    if (vistaData.length === 0) {
+      console.log('No se encontraron docentes para el programa:', nomPrograma);
+      return [];
+    }
+
+    console.log(`Procesando ${vistaData.length} registros para docentes del programa: ${nomPrograma}`);
+
+    // Crear lista de estudiantes y asignaturas únicas
+    const estudiantesAsignaturasUnicos = vistaData
+      .map(row => ({ estudiante: row.ID_ESTUDIANTE, asignatura: row.COD_ASIGNATURA }))
+      .filter((item, index, self) =>
+        index === self.findIndex(t => t.estudiante === item.estudiante && t.asignatura === item.asignatura)
+      );
+
+    // Obtener estadísticas globales para ajuste bayesiano
+    const estadisticasGlobales = await getEstadisticasGlobales(idConfiguracion, estudiantesAsignaturasUnicos);
+
+    // Obtener evaluaciones con puntajes
+    const evaluacionesData = await getEvaluationsWithScores(idConfiguracion, estudiantesAsignaturasUnicos);
+
+    // Inicializar y procesar datos de docentes
+    const docentesMap = initializeTeachersMap(vistaData);
+
+    // Procesar evaluaciones para docentes
+    processEvaluationsForTeachers(docentesMap, evaluacionesData);
+
+    // Calcular métricas finales con ajuste bayesiano
+    const docentes = calculateTeacherMetrics(docentesMap, estadisticasGlobales);
+
+    // Obtener IDs de docentes únicos para consultar aspectos
+    const docentesIds = [...new Set(docentes.map(d => d.ID_DOCENTE))];
+    
+    // Obtener aspectos por docente desde la base de datos local
+    const pool = await getPool();
+    let aspectosPorDocente = new Map();
+    
+    if (docentesIds.length > 0) {
+      const aspectosQuery = `
+        SELECT 
+          e.DOCUMENTO_DOCENTE,
+          ae.ETIQUETA as aspecto,
+          ae.DESCRIPCION as descripcion,
+          AVG(cv.PUNTAJE) as promedio
+        FROM EVALUACIONES e
+        INNER JOIN EVALUACION_DETALLE ed ON e.ID = ed.EVALUACION_ID
+        INNER JOIN CONFIGURACION_ASPECTO ca ON ed.ASPECTO_ID = ca.ID
+        INNER JOIN ASPECTOS_EVALUACION ae ON ca.ASPECTO_ID = ae.ID
+        INNER JOIN CONFIGURACION_VALORACION cv ON ed.VALORACION_ID = cv.ID
+        WHERE e.ID_CONFIGURACION = ?
+          AND e.DOCUMENTO_DOCENTE IN (${docentesIds.map(() => '?').join(',')})
+          AND ca.ACTIVO = TRUE
+        GROUP BY e.DOCUMENTO_DOCENTE, ae.ID, ae.ETIQUETA, ae.DESCRIPCION
+        ORDER BY e.DOCUMENTO_DOCENTE, promedio ASC
+      `;
+      
+      try {
+        const [aspectosData] = await pool.query(aspectosQuery, [idConfiguracion, ...docentesIds]);
+        
+        // Agrupar aspectos por docente
+        aspectosData.forEach(row => {
+          const docId = row.DOCUMENTO_DOCENTE;
+          if (!aspectosPorDocente.has(docId)) {
+            aspectosPorDocente.set(docId, []);
+          }
+          aspectosPorDocente.get(docId).push({
+            aspecto: row.aspecto,
+            descripcion: row.descripcion,
+            promedio: parseFloat(row.promedio || 0).toFixed(2)
+          });
+        });
+      } catch (err) {
+        console.error('Error al obtener aspectos por docente:', err);
+      }
+    }
+
+    // Ordenar docentes por promedio general descendente
+    const docentesOrdenados = docentes.sort((a, b) => {
+      const promedioA = parseFloat(a.PROMEDIO_GENERAL || 0);
+      const promedioB = parseFloat(b.PROMEDIO_GENERAL || 0);
+      return promedioB - promedioA;
+    });
+
+    // Formatear respuesta con estado
+    const docentesConEstado = docentesOrdenados.map((docente, index) => {
+      const promedio = parseFloat(docente.PROMEDIO_GENERAL || 0);
+      const evaluacionesRealizadas = docente.EVALUACIONES_REALIZADAS || 0;
+      const evaluacionesEsperadas = docente.EVALUACIONES_ESPERADAS || 0;
+      const porcentajeEvaluado = evaluacionesEsperadas > 0 
+        ? Math.round((evaluacionesRealizadas / evaluacionesEsperadas) * 100) 
+        : 0;
+      
+      // Determinar estado basado en promedio
+      let estado;
+      if (promedio >= 4.0) {
+        estado = 'excelente';
+      } else if (promedio >= 3.5) {
+        estado = 'bueno';
+      } else if (promedio >= 3.0) {
+        estado = 'regular';
+      } else if (promedio > 0) {
+        estado = 'necesita_mejora';
+      } else {
+        estado = 'sin_evaluar';
+      }
+
+      // Obtener aspectos del docente (ordenados de menor a mayor promedio)
+      const aspectosDocente = aspectosPorDocente.get(docente.ID_DOCENTE) || [];
+      
+      // Filtrar aspectos que necesitan mejora (promedio < 3.5)
+      const aspectosAMejorar = aspectosDocente.filter(a => parseFloat(a.promedio) < 3.5);
+
+      return {
+        id: docente.ID_DOCENTE,
+        nombre: docente.DOCENTE,
+        promedio: promedio.toFixed(2),
+        estado,
+        evaluacionesRealizadas,
+        evaluacionesEsperadas,
+        porcentajeEvaluado,
+        totalEstudiantes: docente.TOTAL_ESTUDIANTES || 0,
+        totalAsignaturas: docente.TOTAL_ASIGNATURAS || 0,
+        posicion: index + 1,
+        aspectos: aspectosDocente,
+        aspectosAMejorar
+      };
+    });
+
+    console.log(`Docentes procesados: ${docentesConEstado.length}`);
+    return docentesConEstado;
+
+  } catch (error) {
+    console.error('Error en getDocentesPorPrograma:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   // Funciones principales
   getDashboardStats,
@@ -1024,6 +1481,9 @@ module.exports = {
   getDetalleDocente,
   getComentariosDocente,
   getComparativaDocente,
+  getEstadisticasPorPrograma,
+  getEstudiantesPorPrograma,
+  getDocentesPorPrograma,
   
   // Utilidades (por si se necesitan en otros módulos)
   buildWhereClause,
@@ -1035,4 +1495,4 @@ module.exports = {
   
   // Configuración
   RANKING_CONFIG
-};// MODIFICADO
+};

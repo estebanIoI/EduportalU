@@ -5,7 +5,8 @@ import { AspectoEvaluacion } from '@/lib/types/evaluacionInsitu';
 export const aspectosEvaluacionService = {
   getAll: async (): Promise<ApiResponse<AspectoEvaluacion[]>> => {
     try {
-      const response = await apiClient.get<AspectoEvaluacion[]>('/aspectos-evaluacion');
+      // Solicitar todos los aspectos con un límite mayor para asegurar que se obtengan todos
+      const response = await apiClient.get<AspectoEvaluacion[]>('/aspectos-evaluacion?limit=50');
       return response;
     } catch (error: any) {
       throw error;

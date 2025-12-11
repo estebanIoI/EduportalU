@@ -1,0 +1,10 @@
+// Exportación de componentes de reportes
+export { EstadisticasCards } from "./EstadisticasCards"
+export { GraficaAspectos, GraficaRadarMateria, GraficaDistribucion } from "./GraficaAspectos"
+export { GraficaComparativa, GraficaComparativaMini, GraficaComparativaAspectos } from "./GraficaComparativa"
+export { TablaDocentes } from "./TablaDocentes"
+export { RankingDocentes, RankingPorAspecto } from "./RankingDocentes"
+export { ResumenIAPanel, ResumenesIAGrid } from "./ResumenIAPanel"
+export { DetalleDocenteModal } from "./DetalleDocenteModal"
+export { PanelAspectosEvaluados, AspectoCard, ResumenAspectos, DistribucionValoraciones } from "./PanelAspectosEvaluados"
+export { PanelAnalisisComentarios, ComentarioItem, EstadisticasSentimiento, clasificarSentimiento } from "./PanelAnalisisComentarios"

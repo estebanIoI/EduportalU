@@ -82,6 +82,20 @@ const getEvaluacionesByDocente = async (req, res, next) => {
   }
 };
 
+const getEvaluacionesByEstudianteAsignatura = async (req, res, next) => {
+  try {
+    const { documentoEstudiante, codigoAsignatura } = req.params;
+    const evaluaciones = await EvaluacionesService.getEvaluacionesByEstudianteAsignatura(documentoEstudiante, codigoAsignatura);
+    return successResponse(res, {
+      message: MESSAGES.GENERAL.FETCH_SUCCESS,
+      data: evaluaciones,
+    });
+  } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
+};
+
 const createEvaluacion = async (req, res, next) => {
   try {
     const evaluacionData = req.body;
@@ -151,6 +165,20 @@ const createEvaluacionU = async (req, res, next) => {
       tipoEvaluacionId,
       req.user.roles
     );
+
+    // Si es una evaluación genérica (no de docentes), devolver respuesta específica
+    if (result.isGenericEvaluation) {
+      return successResponse(res, {
+        message: "Esta es una evaluación genérica. Redirigir a formulario genérico.",
+        data: {
+          total: 0,
+          evaluaciones: [],
+          aspectos: result.aspectos,
+          valoraciones: result.valoraciones,
+          isGenericEvaluation: true
+        },
+      });
+    }
 
     if (result.evaluacionesCreadas.length === 0) {
       return errorResponse(res, { 
@@ -277,16 +305,100 @@ const iniciarProcesoEvaluacion = async (req, res, next) => {
   }
 };
 
+/**
+ * Obtiene los resultados de evaluación de un docente
+ * Incluye nota final y aspectos a mejorar
+ */
+const getResultadosEvaluacionDocente = async (req, res, next) => {
+  try {
+    const { documentoDocente } = req.params;
+    const { codigoMateria } = req.query;
+    
+    const resultados = await EvaluacionesService.getResultadosEvaluacionDocente(
+      documentoDocente, 
+      codigoMateria || null
+    );
+    
+    return successResponse(res, {
+      message: 'Resultados de evaluación obtenidos correctamente',
+      data: resultados,
+    });
+  } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
+};
+
+/**
+ * Obtiene la autoevaluación de un docente para un periodo específico
+ */
+const getAutoevaluacionDocente = async (req, res, next) => {
+  try {
+    const { documentoDocente } = req.params;
+    const { periodo } = req.query;
+    
+    const autoevaluacion = await EvaluacionesService.getAutoevaluacionDocente(
+      documentoDocente, 
+      periodo
+    );
+    
+    // Si no existe autoevaluación, devolver null (no es error, simplemente no la ha hecho)
+    return successResponse(res, {
+      message: autoevaluacion ? 'Autoevaluación obtenida correctamente' : 'No existe autoevaluación aún',
+      data: autoevaluacion,
+    });
+  } catch (error) {
+    error.message = MESSAGES.GENERAL.FETCH_ERROR;
+    next(error);
+  }
+};
+
+/**
+ * Crea o actualiza la autoevaluación de un docente
+ */
+const createAutoevaluacionDocente = async (req, res, next) => {
+  try {
+    const { documentoDocente } = req.params;
+    const { periodo, respuestas } = req.body;
+    
+    if (!periodo || !respuestas || !Array.isArray(respuestas)) {
+      return errorResponse(res, { 
+        code: 400, 
+        message: 'Datos incompletos. Se requiere periodo y respuestas' 
+      });
+    }
+    
+    const resultado = await EvaluacionesService.createAutoevaluacionDocente(
+      documentoDocente,
+      periodo,
+      respuestas
+    );
+    
+    return successResponse(res, {
+      message: 'Autoevaluación guardada correctamente',
+      data: resultado,
+    });
+  } catch (error) {
+    console.error('Error al guardar autoevaluación:', error);
+    error.message = MESSAGES.GENERAL.CREATE_ERROR;
+    next(error);
+  }
+};
+
 module.exports = {
   getEvaluaciones,
   getEvaluacionById,
   getEvaluacionesByEstudiante,
   getEvaluacionesByEstudianteByConfiguracion,
   getEvaluacionesByDocente,
+  getEvaluacionesByEstudianteAsignatura,
   createEvaluacion,
   updateEvaluacion,
   deleteEvaluacion,
   createEvaluacionU,
   getEvaluacionesPendientes,
-  iniciarProcesoEvaluacion
+  iniciarProcesoEvaluacion,
+  getResultadosEvaluacionDocente,
+  getAutoevaluacionDocente,
+  createAutoevaluacionDocente
 };

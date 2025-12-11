@@ -29,6 +29,7 @@ const verifyToken = (req, res, next) => {
 const checkRole = (allowedRoles) => async (req, res, next) => {
   try {
     if (!req.user || !req.user.userId) {
+      console.log('❌ checkRole: Usuario no autenticado');
       return res.status(401).json({ success: false, message: 'No estás autenticado' });
     }
 
@@ -45,6 +46,7 @@ const checkRole = (allowedRoles) => async (req, res, next) => {
     );
 
     if (dataloginRows.length === 0) {
+      console.log(`❌ checkRole: Usuario ${userId} no encontrado en DATALOGIN`);
       return res.status(404).json({ success: false, message: 'Usuario no encontrado' });
     }
 
@@ -66,21 +68,38 @@ const checkRole = (allowedRoles) => async (req, res, next) => {
     // Guardamos los roles en el objeto `req.user`
     req.user.roles = roles;
 
+    console.log(`🔍 checkRole Debug:
+      Usuario ID: ${userId}
+      Rol principal: ${mainRoleName}
+      Roles adicionales: ${userRolesRows.map(row => row.NOMBRE_ROL).join(', ') || 'ninguno'}
+      Roles totales: ${roles.join(', ')}
+      Roles permitidos: ${allowedRoles.join(', ')}
+    `);
+
     // Verificamos si el rol principal o alguno de los roles adicionales está permitido
-    if (allowedRoles.includes(mainRoleName) || userRolesRows.some(row => allowedRoles.includes(row.NOMBRE_ROL))) {
+    const hasPermission = allowedRoles.includes(mainRoleName) || userRolesRows.some(row => allowedRoles.includes(row.NOMBRE_ROL));
+    
+    if (hasPermission) {
+      console.log(`✅ checkRole: Acceso permitido`);
       return next();
     }
 
+    console.log(`❌ checkRole: Acceso denegado - No tiene rol requerido`);
     return res.status(403).json({
       success: false,
-      message: 'No tienes permiso para acceder a este recurso'
+      message: 'No tienes permiso para acceder a este recurso',
+      debug: {
+        userRoles: roles,
+        requiredRoles: allowedRoles
+      }
     });
 
   } catch (error) {
-    console.error('Error en checkRole:', error);
+    console.error('❌ Error en checkRole:', error);
     return res.status(500).json({
       success: false,
-      message: 'Error al verificar roles'
+      message: 'Error al verificar roles',
+      error: error.message
     });
   }
 };

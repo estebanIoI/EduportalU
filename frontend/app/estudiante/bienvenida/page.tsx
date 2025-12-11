@@ -9,13 +9,27 @@ import { authService } from "@/services/evaluacionITP/auth/auth.service"
 import { PerfilEstudiante } from "@/lib/types/auth"
 import { Progress } from "@/components/ui/progress"
 import { useRouter } from "next/navigation"
-import { evaluacionesService } from "@/services"
+import { evaluacionesService, evaluacionesGenericasService } from "@/services"
 import { configuracionEvaluacionService } from "@/services/evaluacionITP/configuracion/configuracionEvaluacion.service"
 import { EvaluacionCreada } from "@/lib/types/evaluacionInsitu";
 import { ConfiguracionEvaluacion} from "@/lib/types/evaluacionInsitu"
-import { Calendar, Clock, FileText, Star, Timer, AlertCircle} from "lucide-react"
+import { Calendar, Clock, FileText, Star, Timer, AlertCircle, CheckCircle2} from "lucide-react"
 import { ModalEvaluacionesCreadas } from "@/app/estudiante/components/ModalEvaluacionesCreadas"
 import { Header } from "../components/Header"
+import { ConnectionStatus } from "@/components/ConnectionStatus"
+import Image from "next/image"
+
+// Función auxiliar para parsear fechas en formato YYYY-MM-DD sin problemas de zona horaria
+const parseFechaLocal = (fechaString: string): Date => {
+  const match = fechaString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Crear fecha usando los componentes directamente (sin zona horaria)
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  }
+  // Fallback
+  return new Date(fechaString);
+};
 
 export default function EstudianteBienvenida() {
   const router = useRouter()
@@ -23,11 +37,14 @@ export default function EstudianteBienvenida() {
   const [perfil, setPerfil] = useState<PerfilEstudiante | null>(null)
   const [configuraciones, setConfiguraciones] = useState<ConfiguracionEvaluacion[]>([])
   const [loading, setLoading] = useState(true)
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [profileError, setProfileError] = useState<string | null>(null)
   const [currentTime, setCurrentTime] = useState(new Date())
   const [modalEvaluacionesOpen, setModalEvaluacionesOpen] = useState(false)
   const [evaluacionesCreadas, setEvaluacionesCreadas] = useState<EvaluacionCreada[]>([]);
   const [configuracionIdSeleccionada, setConfiguracionIdSeleccionada] = useState<number | null>(null)
   const [isCreatingEvaluaciones, setIsCreatingEvaluaciones] = useState(false)
+  const [evaluacionesCompletadas, setEvaluacionesCompletadas] = useState<Record<number, boolean>>({});
 
   // Actualizar el tiempo cada minuto para mantener el contador actualizado
   useEffect(() => {
@@ -41,43 +58,64 @@ export default function EstudianteBienvenida() {
   useEffect(() => {
     const cargarPerfil = async () => {
       try {
-        console.log('Verificando autenticación en bienvenida...');
-        const isAuth = authService.isAuthenticated();
-        console.log('¿Usuario autenticado?', isAuth);
+        setProfileLoading(true);
+        setProfileError(null);
         
-        // Verificar token explícitamente
+        // Verificar token primero
         const token = authService.getToken();
-        console.log('Token disponible:', !!token);
+        if (!token) {
+          setProfileError("No hay sesión activa");
+          toast({
+            title: "Sesión no encontrada",
+            description: "Por favor, inicia sesión nuevamente",
+            variant: "destructive",
+          });
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+          return;
+        }
         
         const response = await authService.getProfile();
-        console.log('Perfil obtenido:', response);
         
         if (response.success && response.data && response.data.tipo === "estudiante") {
           const perfilData = response.data as PerfilEstudiante;
           setPerfil(perfilData);
+          setProfileError(null);
         } else {
-          console.log('Respuesta de perfil no válida:', response);
+          setProfileError("Perfil inválido");
           toast({
-            title: "Error de perfil",
-            description: "No se pudo verificar el perfil de estudiante",
+            title: "Perfil inválido",
+            description: "El perfil de usuario no es válido para estudiantes",
             variant: "destructive",
           });
+          setTimeout(() => {
+            authService.logout();
+            window.location.href = '/login';
+          }, 2000);
         }
       } catch (error: any) {
         console.error('Error al cargar perfil:', error);
+        
+        // Mostrar mensaje específico del error
         const errorMessage = error?.message || "No se pudo cargar el perfil del estudiante";
+        setProfileError(errorMessage);
         
         toast({
-          title: "Error de autenticación",
+          title: "Error al cargar perfil",
           description: errorMessage,
           variant: "destructive",
         });
         
-        // Si hay un error de autenticación, redirigir al login
-        if (error?.error === 'UNAUTHENTICATED') {
-          // Redirección al login
-          window.location.href = '/login';
+        // Si es error de autenticación, redirigir al login
+        if (error?.status === 401 || error?.error === 'UNAUTHENTICATED') {
+          setTimeout(() => {
+            authService.logout();
+            window.location.href = '/login';
+          }, 2000);
         }
+      } finally {
+        setProfileLoading(false);
       }
     };
 
@@ -115,6 +153,41 @@ export default function EstudianteBienvenida() {
     cargarConfiguraciones()
   }, [toast])
 
+  useEffect(() => {
+    const verificarEstado = async () => {
+      if (perfil && configuraciones.length > 0) {
+        const estadosCompletadas: Record<number, boolean> = {};
+        
+        for (const config of configuraciones) {
+          // Solo verificar evaluaciones genéricas (no de docentes)
+          if (!Boolean(config.ES_EVALUACION_DOCENTE)) {
+            try {
+              const evaluacionesExistentes = await evaluacionesGenericasService.getByEstudianteAndConfiguracion(
+                config.ID
+              );
+              
+              const evaluacionesArray = Array.isArray(evaluacionesExistentes) 
+                ? evaluacionesExistentes 
+                : (evaluacionesExistentes?.success && evaluacionesExistentes?.data) 
+                  ? evaluacionesExistentes.data 
+                  : [];
+              
+              if (evaluacionesArray.length > 0 && evaluacionesArray[0].ESTADO === 'completada') {
+                estadosCompletadas[config.ID] = true;
+              }
+            } catch (error) {
+              console.error(`Error al verificar estado de configuración ${config.ID}:`, error);
+            }
+          }
+        }
+        
+        setEvaluacionesCompletadas(estadosCompletadas);
+      }
+    }
+
+    verificarEstado()
+  }, [perfil, configuraciones])
+
   const handleLogout = () => {
     // Limpiar datos locales si es necesario
     router.push("/")
@@ -122,21 +195,19 @@ export default function EstudianteBienvenida() {
 
   const isEvaluacionVigente = (fechaInicio: string, fechaFin: string) => {
     const ahora = new Date()
-    const inicio = new Date(fechaInicio)
-    // La evaluación finaliza a las 23:59 del día anterior
-    const fin = new Date(fechaFin)
+    const inicio = parseFechaLocal(fechaInicio)
+    // La evaluación finaliza a las 23:59 del día de fin
+    const fin = parseFechaLocal(fechaFin)
     fin.setHours(23, 59, 59, 999)
-    fin.setDate(fin.getDate() - 1)
     
     return ahora >= inicio && ahora <= fin
   }
 
   const getTiempoRestante = (fechaFin: string) => {
     const ahora = new Date()
-    // La evaluación finaliza a las 23:59 del día anterior
-    const fin = new Date(fechaFin)
+    // La evaluación finaliza a las 23:59 del día de fin
+    const fin = parseFechaLocal(fechaFin)
     fin.setHours(23, 59, 59, 999)
-    fin.setDate(fin.getDate() - 1)
     
     const diferencia = fin.getTime() - ahora.getTime()
     
@@ -162,11 +233,10 @@ export default function EstudianteBienvenida() {
 
   const getProgressPercentage = (fechaInicio: string, fechaFin: string) => {
     const ahora = new Date()
-    const inicio = new Date(fechaInicio)
-    // La evaluación finaliza a las 23:59 del día anterior
-    const fin = new Date(fechaFin)
+    const inicio = parseFechaLocal(fechaInicio)
+    // La evaluación finaliza a las 23:59 del día de fin
+    const fin = parseFechaLocal(fechaFin)
     fin.setHours(23, 59, 59, 999)
-    fin.setDate(fin.getDate() - 1)
     
     const total = fin.getTime() - inicio.getTime()
     const transcurrido = ahora.getTime() - inicio.getTime()
@@ -183,6 +253,14 @@ export default function EstudianteBienvenida() {
   }
 
   const handleIniciarEvaluacion = async (configuracion: ConfiguracionEvaluacion) => {
+    console.log('🔍 Iniciando evaluación:', {
+      ID: configuracion.ID,
+      ES_EVALUACION_DOCENTE: configuracion.ES_EVALUACION_DOCENTE,
+      tipo: typeof configuracion.ES_EVALUACION_DOCENTE,
+      esBooleano: Boolean(configuracion.ES_EVALUACION_DOCENTE),
+      esNegado: !Boolean(configuracion.ES_EVALUACION_DOCENTE)
+    });
+    
     if (!perfil) {
       toast({
         title: "Error",
@@ -192,6 +270,54 @@ export default function EstudianteBienvenida() {
       return
     }
 
+    // Si la evaluación tiene una URL externa, redirigir directamente
+    if (configuracion.URL_FORMULARIO) {
+      window.open(configuracion.URL_FORMULARIO, '_blank');
+      return;
+    }
+
+    // Convertir a booleano explícitamente (MySQL devuelve 0/1 en lugar de true/false)
+    const esEvaluacionDocente = Boolean(configuracion.ES_EVALUACION_DOCENTE);
+    
+    // Si NO es evaluación de docente, verificar si ya está completada antes de redirigir
+    if (!esEvaluacionDocente) {
+      console.log('✅ NO es evaluación de docentes, verificando estado...');
+      
+      try {
+        // Verificar si ya existe una evaluación completada
+        const evaluacionesExistentes = await evaluacionesGenericasService.getByEstudianteAndConfiguracion(
+          configuracion.ID
+        );
+
+        // Normalizar la respuesta
+        const evaluacionesArray = Array.isArray(evaluacionesExistentes) 
+          ? evaluacionesExistentes 
+          : (evaluacionesExistentes?.success && evaluacionesExistentes?.data) 
+            ? evaluacionesExistentes.data 
+            : [];
+
+        // Si existe y está completada, no permitir el acceso
+        if (evaluacionesArray.length > 0 && evaluacionesArray[0].ESTADO === 'completada') {
+          toast({
+            title: "Evaluación completada",
+            description: "Ya has completado esta evaluación previamente.",
+            variant: "default",
+          });
+          return;
+        }
+      } catch (error) {
+        console.error('Error al verificar estado de evaluación:', error);
+        // Continuar con el flujo normal si hay error en la verificación
+      }
+      
+      // Si no está completada, redirigir normalmente
+      router.push(`/estudiante/evaluacion/${configuracion.ID}`);
+      return;
+    }
+    
+    console.log('✅ SÍ es evaluación de docentes, verificando evaluaciones existentes');
+
+    // Para evaluaciones de docentes, continuar con el flujo existente
     setConfiguracionIdSeleccionada(configuracion.ID)
     
     try {
@@ -241,13 +367,14 @@ export default function EstudianteBienvenida() {
         }
         
         // Helper function to normalize response
-        const normalizeResponse = (rawResponse: any): { success: boolean, evaluaciones: EvaluacionCreada[], message?: string } => {
+        const normalizeResponse = (rawResponse: any): { success: boolean, evaluaciones: EvaluacionCreada[], message?: string, isGenericEvaluation?: boolean } => {
           // Case 1: Standard BulkEvaluacionesResponse format
-          if (rawResponse.success !== undefined && rawResponse.data?.evaluaciones) {
+          if (rawResponse.success !== undefined && rawResponse.data?.evaluaciones !== undefined) {
             return {
               success: rawResponse.success,
               evaluaciones: rawResponse.data.evaluaciones,
-              message: rawResponse.message
+              message: rawResponse.message,
+              isGenericEvaluation: rawResponse.data.isGenericEvaluation || false
             }
           }
           
@@ -288,6 +415,21 @@ export default function EstudianteBienvenida() {
         }
         
         const normalizedResponse = normalizeResponse(response)
+        
+        // Si es una evaluación genérica, redirigir directamente
+        if (normalizedResponse.success && normalizedResponse.isGenericEvaluation) {
+          setModalEvaluacionesOpen(false)
+          setIsCreatingEvaluaciones(false)
+          
+          toast({
+            title: "Evaluación genérica",
+            description: "Redirigiendo al formulario de evaluación...",
+            variant: "default",
+          })
+          
+          router.push(`/estudiante/evaluacion/${configuracion.ID}`)
+          return
+        }
         
         if (normalizedResponse.success && normalizedResponse.evaluaciones.length > 0) {
           
@@ -410,10 +552,108 @@ export default function EstudianteBienvenida() {
     }
   }
 
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="text-center max-w-md w-full">
+          {/* Logo Universidad */}
+          <div className="mb-8 animate-fade-in">
+            <div className="flex justify-center mb-4">
+              <div className="relative w-64 h-24 animate-pulse-slow">
+                <Image
+                  src="/img/uniPutumayo/1-logo-azul-PNG.png"
+                  alt="Universidad de Putumayo"
+                  fill
+                  className="object-contain drop-shadow-2xl"
+                  priority
+                />
+              </div>
+            </div>
+            <div className="h-1 w-32 bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 mx-auto rounded-full animate-pulse-slow"></div>
+          </div>
+
+          {/* Animación de carga mejorada */}
+          <div className="relative mb-6">
+            {/* Círculo exterior pulsante */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-24 h-24 rounded-full bg-blue-500 opacity-20 animate-ping"></div>
+            </div>
+            
+            {/* Círculo intermedio */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full bg-gradient-to-r from-green-400 to-blue-500 opacity-30 animate-pulse"></div>
+            </div>
+            
+            {/* Spinner principal */}
+            <div className="relative flex items-center justify-center h-24">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-gray-700">
+                <div className="h-full w-full rounded-full border-t-4 border-r-4 border-green-400"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Texto de carga */}
+          <div className="space-y-3">
+            <h2 className="text-2xl font-bold text-white animate-fade-in-up">
+              Cargando tus evaluaciones
+            </h2>
+            <p className="text-gray-300 text-lg animate-fade-in-delay">
+              Estamos preparando todo para ti...
+            </p>
+            
+            {/* Puntos animados */}
+            <div className="flex justify-center gap-2 mt-4">
+              <div className="w-3 h-3 bg-green-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="w-3 h-3 bg-purple-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="max-w-md mx-auto shadow-lg">
+          <CardContent className="text-center py-12">
+            <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertCircle className="h-10 w-10 text-red-600" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">Error de conexión</h3>
+            <p className="text-gray-600 mb-6">{profileError}</p>
+            <div className="space-y-3">
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="w-full bg-gray-900 hover:bg-gray-800"
+              >
+                Reintentar
+              </Button>
+              <Button 
+                onClick={() => {
+                  authService.logout();
+                  window.location.href = '/login';
+                }} 
+                variant="outline"
+                className="w-full"
+              >
+                Volver al inicio de sesión
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   if (!perfil) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900 mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Cargando...</p>
+        </div>
       </div>
     )
   }
@@ -423,6 +663,9 @@ export default function EstudianteBienvenida() {
       <Header
         onLogout={handleLogout}
       />
+
+      {/* Indicador de estado de conexión */}
+      <ConnectionStatus />
 
       <main className="container mx-auto p-6 max-w-6xl">
         {/* Evaluaciones Disponibles */}
@@ -461,12 +704,15 @@ export default function EstudianteBienvenida() {
                 const tiempoRestante = getTiempoRestante(configuracion.FECHA_FIN)
                 const progreso = getProgressPercentage(configuracion.FECHA_INICIO, configuracion.FECHA_FIN)
                 const urgencyLevel = getUrgencyLevel(tiempoRestante)
+                const estaCompletada = evaluacionesCompletadas[configuracion.ID] || false
 
                 return (
                   <Card
                     key={configuracion.ID}
                     className={`relative group transition-all duration-500 hover:scale-105 hover:shadow-2xl rounded-3xl border-2 animate-fade-in-up overflow-hidden ${
-                      vigente
+                      estaCompletada
+                        ? 'bg-green-50 border-green-300 opacity-90'
+                        : vigente
                         ? 'bg-white border-gray-200 hover:border-gray-300'
                         : 'bg-gray-50 border-gray-100 opacity-90'
                     }`}
@@ -478,14 +724,16 @@ export default function EstudianteBienvenida() {
                     {/* Badge de estado con animación */}
                     <div className="absolute top-6 right-6 z-10">
                       <Badge
-                        variant={vigente ? "default" : "secondary"}
+                        variant={estaCompletada ? "default" : vigente ? "default" : "secondary"}
                         className={`rounded-full px-4 py-2 text-sm font-semibold transition-all duration-300 ${
-                          vigente
+                          estaCompletada
+                            ? 'bg-green-100 text-green-700 border-green-300'
+                            : vigente
                             ? 'bg-green-100 text-green-700 border-green-200 animate-pulse-slow'
                             : 'bg-gray-100 text-gray-500 border-gray-200'
                         }`}
                       >
-                        {vigente ? 'Activa' : 'Inactiva'}
+                        {estaCompletada ? 'Completada' : vigente ? 'Activa' : 'Inactiva'}
                       </Badge>
                     </div>
 
@@ -517,7 +765,7 @@ export default function EstudianteBienvenida() {
                           <div>
                             <span className="text-gray-600 block">Inicio</span>
                             <span className="font-semibold text-gray-900">
-                              {new Date(configuracion.FECHA_INICIO).toLocaleDateString("es-ES", {
+                              {parseFechaLocal(configuracion.FECHA_INICIO).toLocaleDateString("es-ES", {
                                 day: 'numeric',
                                 month: 'short',
                                 year: 'numeric'
@@ -533,7 +781,7 @@ export default function EstudianteBienvenida() {
                             <span className="text-gray-600 block">Finaliza</span>
                               <span className="font-semibold text-gray-900">
                                 {(() => {
-                                  const fechaFin = new Date(configuracion.FECHA_FIN);
+                                  const fechaFin = parseFechaLocal(configuracion.FECHA_FIN);
                                   fechaFin.setDate(fechaFin.getDate() - 1); // Restar un día
 
                                   return fechaFin.toLocaleDateString("es-ES", {
@@ -621,14 +869,21 @@ export default function EstudianteBienvenida() {
                       <div className="pt-2">
                         <Button
                           className={`w-full text-base font-semibold py-4 px-6 rounded-2xl transition-all duration-300 transform hover:scale-105 active:scale-95 ${
-                            vigente
+                            estaCompletada
+                              ? 'bg-green-100 text-green-700 cursor-not-allowed'
+                              : vigente
                               ? 'bg-gray-900 hover:bg-gray-800 text-white shadow-lg hover:shadow-xl'
                               : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                           }`}
-                          disabled={!vigente}
+                          disabled={!vigente || estaCompletada}
                           onClick={() => handleIniciarEvaluacion(configuracion)}
                         >
-                          {vigente ? (
+                          {estaCompletada ? (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-5 w-5" />
+                              Evaluación Completada
+                            </div>
+                          ) : vigente ? (
                             <div className="flex items-center gap-2">
                               <Star className="h-5 w-5" />
                               Iniciar Evaluación
@@ -682,16 +937,22 @@ export default function EstudianteBienvenida() {
           50% { opacity: 0.8; }
         }
         
+        @keyframes gradient {
+          0% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+          100% { background-position: 0% 50%; }
+        }
+        
         .animate-fade-in {
           animation: fade-in 0.6s ease-out;
         }
         
         .animate-fade-in-delay {
-          animation: fade-in 0.6s ease-out 0.2s both;
+          animation: fade-in 0.6s ease-out 0.5s both;
         }
         
         .animate-fade-in-up {
-          animation: fade-in-up 0.8s ease-out;
+          animation: fade-in-up 0.8s ease-out 0.3s both;
         }
         
         .animate-shimmer {
@@ -700,6 +961,11 @@ export default function EstudianteBienvenida() {
         
         .animate-pulse-slow {
           animation: pulse-slow 2s ease-in-out infinite;
+        }
+        
+        .animate-gradient {
+          background-size: 200% 200%;
+          animation: gradient 3s ease infinite;
         }
       `}</style>
     </div>

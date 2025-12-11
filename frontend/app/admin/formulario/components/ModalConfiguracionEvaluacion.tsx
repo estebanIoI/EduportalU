@@ -17,7 +17,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent } from "@/components/ui/card"
-import { Calendar, Settings, Clock, CheckCircle2, AlertTriangle } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
+import { Calendar, Settings, Clock, CheckCircle2, AlertTriangle, FileText, Link as LinkIcon } from "lucide-react"
 import { ConfiguracionEvaluacion, TipoEvaluacion } from "@/lib/types/evaluacionInsitu"
 import { configuracionEvaluacionService, tiposEvaluacionService } from "@/services"
 import { useToast } from "@/hooks/use-toast"
@@ -57,7 +59,11 @@ export function ModalConfiguracionEvaluacion({
   const [formData, setFormData] = useState({
     TIPO_EVALUACION_ID: "",
     FECHA_INICIO: "",
-    FECHA_FIN: ""
+    FECHA_FIN: "",
+    ES_EVALUACION_DOCENTE: true,
+    TITULO: "",
+    INSTRUCCIONES: "",
+    URL_FORMULARIO: ""
   })
 
   const [tiposEvaluacion, setTiposEvaluacion] = useState<TipoEvaluacion[]>([])
@@ -125,7 +131,11 @@ export function ModalConfiguracionEvaluacion({
       setFormData({
         TIPO_EVALUACION_ID: configuracion.TIPO_EVALUACION_ID.toString(),
         FECHA_INICIO: formatDateForInput(configuracion.FECHA_INICIO),
-        FECHA_FIN: formatDateForInput(configuracion.FECHA_FIN)
+        FECHA_FIN: formatDateForInput(configuracion.FECHA_FIN),
+        ES_EVALUACION_DOCENTE: Boolean(configuracion.ES_EVALUACION_DOCENTE),
+        TITULO: configuracion.TITULO || "",
+        INSTRUCCIONES: configuracion.INSTRUCCIONES || "",
+        URL_FORMULARIO: configuracion.URL_FORMULARIO || ""
       })
     } else {
       // Para una nueva configuración, sugerimos fecha de hoy como inicio
@@ -137,7 +147,11 @@ export function ModalConfiguracionEvaluacion({
       setFormData({
         TIPO_EVALUACION_ID: "",
         FECHA_INICIO: today,
-        FECHA_FIN: nextWeek.toISOString().split('T')[0]
+        FECHA_FIN: nextWeek.toISOString().split('T')[0],
+        ES_EVALUACION_DOCENTE: true,
+        TITULO: "",
+        INSTRUCCIONES: "",
+        URL_FORMULARIO: ""
       })
     }
   }, [configuracion, isOpen])
@@ -201,16 +215,18 @@ export function ModalConfiguracionEvaluacion({
     }
 
     try {
-      // Asegurarse de que las fechas estén en el formato correcto (YYYY-MM-DD)
-      const formattedStartDate = formData.FECHA_INICIO; // Ya está en formato YYYY-MM-DD del input date
-      const formattedEndDate = formData.FECHA_FIN; // Ya está en formato YYYY-MM-DD del input date
-      
-      // Creamos el payload con los nombres de campos exactamente como los espera el backend
+      // El backend espera las fechas en formato YYYY-MM-DD
+      // Las fechas del input type="date" ya vienen en este formato
+      // Aseguramos que ES_EVALUACION_DOCENTE sea un booleano explícito
       const payload = {
         TIPO_EVALUACION_ID: parseInt(formData.TIPO_EVALUACION_ID),
-        FECHA_INICIO: formattedStartDate,
-        FECHA_FIN: formattedEndDate,
-        ACTIVO: true
+        FECHA_INICIO: formData.FECHA_INICIO,
+        FECHA_FIN: formData.FECHA_FIN,
+        ACTIVO: true,
+        ES_EVALUACION_DOCENTE: Boolean(formData.ES_EVALUACION_DOCENTE),
+        TITULO: formData.TITULO || undefined,
+        INSTRUCCIONES: formData.INSTRUCCIONES || undefined,
+        URL_FORMULARIO: formData.URL_FORMULARIO || undefined
       }
       
       // Log para depuración
@@ -325,6 +341,73 @@ export function ModalConfiguracionEvaluacion({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Tipo de Evaluación - Switch */}
+              <div className="flex items-center justify-between space-x-2 p-3 bg-muted/50 rounded-lg">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-medium">
+                    ¿Es evaluación de docentes?
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Activa esto si la evaluación está relacionada con docentes
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.ES_EVALUACION_DOCENTE}
+                  onCheckedChange={(checked) => 
+                    setFormData({ ...formData, ES_EVALUACION_DOCENTE: checked })
+                  }
+                />
+              </div>
+
+              {/* Título (opcional) */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  Título de la Evaluación <span className="text-xs text-muted-foreground">(opcional)</span>
+                </Label>
+                <Input
+                  type="text"
+                  placeholder="Ej: Evaluación de Desempeño Docente"
+                  value={formData.TITULO}
+                  onChange={(e) => setFormData({ ...formData, TITULO: e.target.value })}
+                  className="w-full"
+                />
+              </div>
+
+              {/* Instrucciones (opcional) */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  Instrucciones <span className="text-xs text-muted-foreground">(opcional)</span>
+                </Label>
+                <Textarea
+                  placeholder="Instrucciones para los estudiantes sobre cómo completar la evaluación..."
+                  value={formData.INSTRUCCIONES}
+                  onChange={(e) => setFormData({ ...formData, INSTRUCCIONES: e.target.value })}
+                  className="w-full min-h-[80px]"
+                />
+              </div>
+
+              {/* URL Formulario (opcional) - solo si NO es evaluación docente */}
+              {!formData.ES_EVALUACION_DOCENTE && (
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <LinkIcon className="h-4 w-4 text-primary" />
+                    URL del Formulario Externo <span className="text-xs text-muted-foreground">(opcional)</span>
+                  </Label>
+                  <Input
+                    type="url"
+                    placeholder="https://forms.google.com/..."
+                    value={formData.URL_FORMULARIO}
+                    onChange={(e) => setFormData({ ...formData, URL_FORMULARIO: e.target.value })}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Si completas esta URL, al evaluar se redirigirá al estudiante a este formulario externo
+                  </p>
+                </div>
+              )}
 
               {/* Fechas en Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

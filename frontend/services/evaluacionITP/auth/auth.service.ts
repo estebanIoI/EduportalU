@@ -2,9 +2,25 @@ import { apiClient } from '@/lib/api';
 import { ApiResponse, ApiError } from '@/lib/types/api.types';
 import { LoginRequest, LoginData, AuthTokens, PerfilUsuario } from '@/lib/types/auth.types';
 
+// Cache para el perfil del usuario
+interface ProfileCache {
+  data: PerfilUsuario | null;
+  timestamp: number;
+  promise: Promise<ApiResponse<PerfilUsuario>> | null;
+}
+
 class AuthService {
   private readonly TOKEN_KEY = 'token';
   private readonly REFRESH_TOKEN_KEY = 'refreshToken';
+  private readonly PROFILE_CACHE_KEY = 'profileCache';
+  private readonly PROFILE_CACHE_TTL = 5 * 60 * 1000; // 5 minutos de caché
+  
+  // Caché en memoria para el perfil
+  private profileCache: ProfileCache = {
+    data: null,
+    timestamp: 0,
+    promise: null
+  };
 
   getToken(): string | null {
     return localStorage.getItem(this.TOKEN_KEY);
@@ -24,6 +40,80 @@ class AuthService {
   removeTokens(): void {
     localStorage.removeItem(this.TOKEN_KEY);
     localStorage.removeItem(this.REFRESH_TOKEN_KEY);
+    // Limpiar caché del perfil al remover tokens
+    this.clearProfileCache();
+  }
+
+  // Limpiar caché del perfil
+  clearProfileCache(): void {
+    this.profileCache = {
+      data: null,
+      timestamp: 0,
+      promise: null
+    };
+    // También limpiar del localStorage si existe
+    try {
+      localStorage.removeItem(this.PROFILE_CACHE_KEY);
+    } catch (e) {
+      // Ignorar errores de localStorage
+    }
+  }
+
+  // Verificar si el caché del perfil es válido
+  private isProfileCacheValid(): boolean {
+    const now = Date.now();
+    return (
+      this.profileCache.data !== null &&
+      (now - this.profileCache.timestamp) < this.PROFILE_CACHE_TTL
+    );
+  }
+
+  // Guardar perfil en caché
+  private cacheProfile(profile: PerfilUsuario): void {
+    this.profileCache = {
+      data: profile,
+      timestamp: Date.now(),
+      promise: null
+    };
+    // También guardar en localStorage para persistencia
+    try {
+      localStorage.setItem(this.PROFILE_CACHE_KEY, JSON.stringify({
+        data: profile,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      // Ignorar errores de localStorage
+    }
+  }
+
+  // Obtener perfil del caché (incluyendo localStorage)
+  private getCachedProfile(): PerfilUsuario | null {
+    // Primero verificar caché en memoria
+    if (this.isProfileCacheValid()) {
+      return this.profileCache.data;
+    }
+    
+    // Intentar recuperar de localStorage
+    try {
+      const cached = localStorage.getItem(this.PROFILE_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const now = Date.now();
+        if (parsed.data && (now - parsed.timestamp) < this.PROFILE_CACHE_TTL) {
+          // Restaurar caché en memoria
+          this.profileCache = {
+            data: parsed.data,
+            timestamp: parsed.timestamp,
+            promise: null
+          };
+          return parsed.data;
+        }
+      }
+    } catch (e) {
+      // Ignorar errores de localStorage
+    }
+    
+    return null;
   }
 
   isAuthenticated(): boolean {
@@ -33,6 +123,9 @@ class AuthService {
 
   async login(credentials: LoginRequest): Promise<ApiResponse<LoginData>> {
     try {
+      // IMPORTANTE: Limpiar caché del perfil anterior antes de iniciar nueva sesión
+      this.clearProfileCache();
+      
       const response = await apiClient.post<LoginData>('/auth/login', credentials);
       
       // Si es exitoso, guardar tokens
@@ -50,7 +143,7 @@ class AuthService {
     }
   }
 
-  async getProfile(): Promise<ApiResponse<PerfilUsuario>> {
+  async getProfile(forceRefresh: boolean = false): Promise<ApiResponse<PerfilUsuario>> {
     // Verificar autenticación
     const token = this.getToken();
     if (process.env.NODE_ENV === 'development') {
@@ -69,6 +162,44 @@ class AuthService {
       throw authError;
     }
 
+    // Verificar caché primero (si no se fuerza refresh)
+    if (!forceRefresh) {
+      const cachedProfile = this.getCachedProfile();
+      if (cachedProfile) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📦 Perfil obtenido del caché');
+        }
+        return {
+          success: true,
+          message: 'Perfil obtenido del caché',
+          data: cachedProfile
+        };
+      }
+      
+      // Si ya hay una petición en curso, reutilizarla (deduplicación)
+      if (this.profileCache.promise) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 Reutilizando petición de perfil en curso');
+        }
+        return this.profileCache.promise;
+      }
+    }
+
+    // Crear la promesa de la petición
+    const profilePromise = this._fetchProfile(token!);
+    this.profileCache.promise = profilePromise;
+
+    try {
+      const response = await profilePromise;
+      return response;
+    } finally {
+      // Limpiar la promesa en curso
+      this.profileCache.promise = null;
+    }
+  }
+
+  // Método interno para hacer la petición real del perfil
+  private async _fetchProfile(token: string): Promise<ApiResponse<PerfilUsuario>> {
     try {
       // Configurar headers explícitamente con el token
       const config = {
@@ -79,7 +210,7 @@ class AuthService {
       };
       
       if (process.env.NODE_ENV === 'development') {
-        console.log('Solicitando perfil con config:', config);
+        console.log('🌐 Solicitando perfil al servidor...');
       }
       
       // Usar getSilent para evitar mostrar mensaje de éxito en cada consulta de perfil
@@ -88,9 +219,12 @@ class AuthService {
         console.log('Respuesta de perfil:', response);
       }
 
-      // Discriminar por tipo de usuario
+      // Discriminar por tipo de usuario y guardar en caché
       if (response.success && response.data) {
         const perfil = response.data;
+        
+        // Guardar en caché
+        this.cacheProfile(perfil);
 
         switch (perfil.tipo) {
           case "estudiante":

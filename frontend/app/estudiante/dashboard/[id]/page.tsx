@@ -7,9 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { authService } from "@/services/evaluacionITP/auth/auth.service"
-import { PerfilEstudiante, MateriaEstudiante } from "@/lib/types/auth"
-import { Progress } from "@/components/ui/progress"
-import { apiClient } from "@/services/api.client" 
+import { PerfilEstudiante } from "@/lib/types/auth"
+import { Progress } from "@/components/ui/progress" 
 import {
   Dialog,
   DialogContent,
@@ -33,87 +32,91 @@ export default function EstudianteDashboard() {
   const router = useRouter()
   const { toast } = useToast()
   const [perfil, setPerfil] = useState<PerfilEstudiante | null>(null)
-  const [materias, setMaterias] = useState<MateriaEstudiante[]>([])
   const [reporte, setReporte] = useState<ReporteEvaluaciones | null>(null)
   const [showProfileModal, setShowProfileModal] = useState(false)
   const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([])
+  const [loading, setLoading] = useState(true)
   const params = useParams()
   
   const configId = params?.id
   const id = configId ? (Array.isArray(configId) ? Number(configId[0]) : Number(configId)) : null
 
   useEffect(() => {    
-    const cargarPerfil = async () => {
+    const cargarDatos = async () => {
+      if (id === null || isNaN(id)) {
+        toast({
+          title: "Error de navegación",
+          description: "No se pudo identificar la configuración de evaluación",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      
       try {
-        const response = await authService.getProfile()
-        if (response.success && response.data.tipo === "estudiante") {
-          const perfilData = response.data as PerfilEstudiante
-          setPerfil(perfilData)
-          setMaterias(perfilData.materias)
-          
-          // ✅ Nuevo cliente con tipado
-          try {
-            const reporteResponse = await apiClient.get<ReporteEvaluaciones[]>(
-              `/reportes/estudiantes/${perfilData.documento}/configuracion/${id}`
-            )
+        // Obtener documento del token para iniciar carga inmediata
+        const user = authService.getCurrentUser();
+        const documento = user?.username; // El username es el documento en este sistema
 
-            if (reporteResponse.success && reporteResponse.data.length > 0) {
-              setReporte(reporteResponse.data[0])
-            }
-          } catch (error) {
-            toast({
-              title: "Error",
-              description: "No se pudo cargar el reporte de evaluaciones",
-              variant: "destructive",
-            })
-          }
+        if (!documento) {
+          throw new Error("No se pudo identificar al usuario");
+        }
 
-          if (id !== null && !isNaN(id)) {
-            try {
-              const evaluacionesResponse = await evaluacionesService.getByEstudianteByConfiguracion(perfilData.documento, id);
-              
-              // Accede a la propiedad 'data' de la ApiResponse
-              if (evaluacionesResponse.success && Array.isArray(evaluacionesResponse.data)) {
-                setEvaluaciones(evaluacionesResponse.data);
-              } else {
-                console.log('Respuesta sin éxito o datos no válidos:', evaluacionesResponse);
-                setEvaluaciones([]);
-              }
-            } catch (error) {
-              console.error('Error cargando evaluaciones:', error);
-              toast({
-                title: "Error",
-                description: "No se pudo cargar las evaluaciones",
-                variant: "destructive",
-              });
-              setEvaluaciones([]); // Asegúrate de limpiar el estado en caso de error
-            }
-          } else {
-            toast({
-              title: "Error de navegación",
-              description: "No se pudo identificar la configuración de evaluación",
-              variant: "destructive",
-            });
-          }
+        // Cargar perfil y evaluaciones en paralelo
+        const [perfilResponse, evaluacionesResponse] = await Promise.all([
+          authService.getProfile(),
+          evaluacionesService.getByEstudianteByConfiguracion(documento, id)
+        ]);
 
+        // Procesar perfil
+        if (perfilResponse.success && perfilResponse.data.tipo === "estudiante") {
+          setPerfil(perfilResponse.data as PerfilEstudiante);
         } else {
           toast({
             title: "Error",
             description: "No se pudo cargar el perfil del estudiante",
             variant: "destructive",
-          })
+          });
         }
+
+        // Procesar evaluaciones y generar reporte localmente
+        if (evaluacionesResponse.success && Array.isArray(evaluacionesResponse.data)) {
+          const evals = evaluacionesResponse.data;
+          setEvaluaciones(evals);
+
+          // Calcular reporte localmente para evitar llamada extra al backend
+          const total = evals.length;
+          const completadas = evals.filter(e => e.ACTIVO).length;
+          const pendientes = total - completadas;
+          const porcentaje = total > 0 ? ((completadas / total) * 100).toFixed(2) : "0";
+
+          setReporte({
+            total_materias: total,
+            evaluaciones_completadas: completadas,
+            materias_pendientes: pendientes,
+            porcentaje_completado: porcentaje
+          });
+        } else {
+          console.log('Respuesta sin éxito o datos no válidos:', evaluacionesResponse);
+          setEvaluaciones([]);
+        }
+
       } catch (error) {
+        console.error('Error cargando datos:', error);
         toast({
           title: "Error",
-          description: "No se pudo cargar el perfil del estudiante",
+          description: "Ocurrió un error al cargar los datos",
           variant: "destructive",
-        })
+        });
+      } finally {
+        setLoading(false);
       }
     }
 
     if (configId !== undefined) {
-      cargarPerfil()
+      cargarDatos()
     }
   }, [toast, id, configId, params])
 
@@ -121,10 +124,21 @@ export default function EstudianteDashboard() {
     window.location.href = `/estudiante/evaluar/${id}`
   }
 
-  if (!perfil) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900"></div>
+      </div>
+    )
+  }
+
+  if (!perfil && !loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h3 className="text-xl font-semibold text-gray-900">Error al cargar perfil</h3>
+          <Button onClick={() => window.location.reload()} className="mt-4">Reintentar</Button>
+        </div>
       </div>
     )
   }
@@ -314,12 +328,12 @@ export default function EstudianteDashboard() {
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-xl border border-gray-200">
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Documento</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.tipo_doc} {perfil.documento}</p>
+                  <p className="text-lg font-bold text-gray-900">{perfil?.tipo_doc} {perfil?.documento}</p>
                 </div>
                 <div className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-xl border border-gray-200">
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Estado</p>
                   <Badge variant="outline" className="bg-green-100 text-green-800 border-green-200 px-3 py-1 font-semibold">
-                    {perfil.estado_matricula}
+                    {perfil?.estado_matricula}
                   </Badge>
                 </div>
               </div>
@@ -327,15 +341,15 @@ export default function EstudianteDashboard() {
               <div className="space-y-6">
                 <div className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-xl border border-gray-200">
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Semestre</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.semestre}</p>
+                  <p className="text-lg font-bold text-gray-900">{perfil?.semestre}</p>
                 </div>
                 <div className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-xl border border-gray-200">
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Programa</p>
-                  <p className="text-lg font-bold text-gray-900 leading-tight">{perfil.programa}</p>
+                  <p className="text-lg font-bold text-gray-900 leading-tight">{perfil?.programa}</p>
                 </div>
                 <div className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-xl border border-gray-200">
                   <p className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Periodo</p>
-                  <p className="text-lg font-bold text-gray-900">{perfil.periodo}</p>
+                  <p className="text-lg font-bold text-gray-900">{perfil?.periodo}</p>
                 </div>
               </div>
             </div>

@@ -151,7 +151,7 @@ export default function LoginPage() {
       <div className={`${layoutClasses.mainCard} ${animationClass} backdrop-blur-sm bg-white/95 shadow-2xl`}>
         {/* Media Section */}
         <div className={`${layoutClasses.mediaSection} transition-all duration-500 delay-200 ease-out 
-            transform duration-300 overflow-hidden bg-black/5 backdrop-blur-none
+            transform overflow-hidden bg-black/5 backdrop-blur-none
             ${isPageLoaded ? "translate-x-0 opacity-100" : "-translate-x-6 opacity-0"}`}>
           <div className="absolute inset-0 pointer-events-none overflow-hidden">
             <MediaContent

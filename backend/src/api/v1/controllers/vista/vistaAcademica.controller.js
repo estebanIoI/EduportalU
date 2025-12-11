@@ -3,6 +3,22 @@ const VistaAcademicaModel = require('../../models/vista/vistaAcademica.model');
 
 const getVistaAcademica = async (req, res, next) => {
   try {
+    const { ID_DOCENTE, COD_ASIGNATURA, GRUPO, PERIODO } = req.query;
+    
+    // Si hay filtros, usar el método con filtros
+    if (ID_DOCENTE || COD_ASIGNATURA || GRUPO) {
+      const filters = {};
+      if (ID_DOCENTE) filters.ID_DOCENTE = ID_DOCENTE;
+      if (COD_ASIGNATURA) filters.COD_ASIGNATURA = COD_ASIGNATURA;
+      if (GRUPO) filters.GRUPO = GRUPO;
+      if (PERIODO) filters.PERIODO = PERIODO;
+      
+      console.log('getVistaAcademica - Filtros aplicados:', filters);
+      const vistaAcademica = await VistaAcademicaModel.getVistaAcademicaFiltered(filters);
+      return res.status(200).json({ success: true, data: vistaAcademica });
+    }
+    
+    // Sin filtros, devolver todo (comportamiento original)
     const vistaAcademica = await VistaAcademicaModel.getAllVistaAcademica();
     return res.status(200).json({ success: true, data: vistaAcademica });
   } catch (error) {
@@ -35,6 +51,8 @@ const getOpcionesFiltros = async (req, res, next) => {
       semestre 
     } = req.query;
 
+    console.log('getOpcionesFiltros - Parámetros recibidos:', { periodo, sede, programa, semestre });
+
     // Validar que periodo sea obligatorio
     if (!periodo) {
       return res.status(400).json({ 
@@ -49,8 +67,12 @@ const getOpcionesFiltros = async (req, res, next) => {
     if (programa) filters.programa = programa;
     if (semestre) filters.semestre = semestre;
 
+    console.log('Filtros construidos:', filters);
+
     // Obtener opciones disponibles para el siguiente nivel
     const opciones = await VistaAcademicaModel.getOpcionesFiltros(filters);
+    
+    console.log('Opciones obtenidas en controller:', JSON.stringify(opciones, null, 2));
     
     return res.status(200).json({ 
       success: true, 
@@ -75,9 +97,12 @@ const getPeriodos = async (req, res, next) => {
 
 const getSedes = async (req, res, next) => {
   try {
+    console.log('Obteniendo sedes...');
     const sedes = await VistaAcademicaModel.getSedes();
+    console.log('Sedes obtenidas en controller:', JSON.stringify(sedes, null, 2));
     return res.status(200).json({ success: true, data: sedes });  
   } catch (err) {
+    console.error('Error en getSedes controller:', err);
     return res.status(500).json({ success: false, message: 'Error al obtener las sedes', error: err.message });
   }
 };

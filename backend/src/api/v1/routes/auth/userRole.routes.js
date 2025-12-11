@@ -14,21 +14,21 @@ const {
 // Aplicar verificación de token a todas las rutas
 router.use(verifyToken);
 
-router.get('/search/:username', checkRole(['Admin']), searchUser);
+router.get('/search/:username', checkRole(['Admin', 'Director Programa']), searchUser);
 
-// Obtener todos los roles asignados (solo Admin)
-router.get('/', checkRole(['Admin']), getAllUserRoles);
+// Obtener todos los roles asignados (Admin y Director Programa)
+router.get('/', checkRole(['Admin', 'Director Programa']), getAllUserRoles);
 
-// Obtener roles de un usuario específico (Admin o el mismo usuario)
-router.get('/:userId', checkRole(['Admin']), getUserRoles);
+// Obtener roles de un usuario específico (Admin, Director Programa o el mismo usuario)
+router.get('/:userId', checkRole(['Admin', 'Director Programa']), getUserRoles);
 
-// Asignar un rol (solo Admin)
-router.post('/', checkRole(['Admin']), assignRole);
+// Asignar un rol (Admin y Director Programa)
+router.post('/', checkRole(['Admin', 'Director Programa']), assignRole);
 
-// Actualizar un rol asignado (solo Admin)
-router.put('/:id', checkRole(['Admin']), updateRole);
+// Actualizar un rol asignado (Admin y Director Programa)
+router.put('/:id', checkRole(['Admin', 'Director Programa']), updateRole);
 
-// Eliminar un rol asignado (solo Admin)
-router.delete('/:id', checkRole(['Admin']), removeRole);
+// Eliminar un rol asignado (Admin y Director Programa)
+router.delete('/:id', checkRole(['Admin', 'Director Programa']), removeRole);
 
 module.exports = router;

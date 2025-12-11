@@ -14,7 +14,8 @@ const getDocentesAsignaturasController = async (req, res, next) => {
       nombreSede,
       nomPrograma,
       semestre,
-      grupo
+      grupo,
+      idDocente
     } = req.query;
 
     const filters = {
@@ -23,7 +24,8 @@ const getDocentesAsignaturasController = async (req, res, next) => {
       nombreSede,
       nomPrograma,
       semestre,
-      grupo
+      grupo,
+      idDocente
     };
 
     const { pagination } = req;

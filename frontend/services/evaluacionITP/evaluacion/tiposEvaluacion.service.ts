@@ -5,7 +5,8 @@ import { TipoEvaluacion, EstadoActivo, ConfiguracionResponse } from '@/lib/types
 export const tiposEvaluacionService = {
   getAll: async (): Promise<ApiResponse<TipoEvaluacion[]>> => {
     try {
-      const response = await apiClient.get<TipoEvaluacion[]>('/tipos-evaluaciones');
+      // Solicitar todos los tipos de evaluación con un límite mayor para asegurar que se obtengan todos
+      const response = await apiClient.get<TipoEvaluacion[]>('/tipos-evaluaciones?limit=50');
       return response;
     } catch (error: any) {
       throw error;

@@ -106,22 +106,33 @@ const updateEstadoConfiguracion = async (req, res, next) => {
     const { id } = req.params;
     const { activo } = req.body;
 
+    console.log('📝 Solicitud de cambio de estado:');
+    console.log('   ID de configuración:', id);
+    console.log('   Nuevo estado (activo):', activo);
+    console.log('   Tipo de dato:', typeof activo);
+
     // Validación del estado
     if (typeof activo !== 'number' || (activo !== 0 && activo !== 1)) {
-      return errorResponse(res, { code: 400, message: 'Valor de estado inválido' });
+      console.log('❌ Validación fallida: valor de estado inválido');
+      return errorResponse(res, { code: 400, message: 'Valor de estado inválido. Debe ser 0 o 1' });
     }
 
     const configuracion = await ConfiguracionEvaluacionService.getConfiguracionById(id);
     if (!configuracion) {
+      console.log('❌ Configuración no encontrada');
       return errorResponse(res, { code: 404, message: MESSAGES.GENERAL.NOT_FOUND });
     }
 
+    console.log('✓ Configuración encontrada, procediendo a actualizar...');
     const updated = await ConfiguracionEvaluacionService.updateEstado(id, activo);
+    
+    console.log('✅ Estado actualizado exitosamente');
     return successResponse(res, {
       message: MESSAGES.GENERAL.UPDATED,
       data: updated,
     });
   } catch (error) {
+    console.error('❌ Error en updateEstadoConfiguracion:', error);
     error.message = MESSAGES.GENERAL.UPDATED_ERROR;
     next(error);
   }

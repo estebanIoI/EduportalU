@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AspectoEvaluacion, EscalaValoracion, ConfiguracionEvaluacion, TipoEvaluacion, ConfiguracionAspecto, EstadoActivo } from "@/lib/types/evaluacionInsitu";
-import { configuracionAspectoService, configuracionValoracionService } from "@/services";
+import { AspectoEvaluacion, EscalaValoracion, ConfiguracionEvaluacion, TipoEvaluacion, ConfiguracionAspecto, EstadoActivo, ConfiguracionPregunta } from "@/lib/types/evaluacionInsitu";
+import { configuracionAspectoService, configuracionValoracionService, configuracionPreguntaService } from "@/services";
 import { Dispatch, SetStateAction } from "react";
 import { Badge } from "@/components/ui/badge";
 
@@ -25,20 +25,34 @@ interface EvaluacionViewProps {
   cargarDatosFiltrados: (configuracionId: number) => Promise<void>;
   setModalConfiguracionAspecto: Dispatch<SetStateAction<{ isOpen: boolean; configuracion: any | undefined }>>;
   setModalConfiguracionValoracion: Dispatch<SetStateAction<{ isOpen: boolean; configuracion: any | undefined }>>;
+  setModalConfiguracionPregunta?: Dispatch<SetStateAction<{ isOpen: boolean; configuracion: any | undefined }>>;
   configuracionAspectos: any[];
   configuracionValoraciones: any[];
+  configuracionPreguntas?: any[];
   handleEliminarConfiguracionAspecto: (configuracion: ConfiguracionEvaluacion) => void;
   handleEliminarConfiguracionValoracion: (configuracion: ConfiguracionEvaluacion) => void;
+  handleEliminarConfiguracionPregunta?: (configuracion: ConfiguracionEvaluacion) => void;
   refreshAspectos: () => void;
 }
 
-const formatearFecha = (fechaISO: string) => {
-  const fecha = new Date(fechaISO);
-  const formateada = fecha.toLocaleDateString("es-ES", {
-    day: "numeric",
-    month: "long",
-  });
-  return formateada.charAt(0).toUpperCase() + formateada.slice(1);
+const formatearFecha = (fechaString: string) => {
+  if (!fechaString) return "N/A";
+  
+  // Si la fecha está en formato YYYY-MM-DD, parseamos directamente sin zona horaria
+  const match = fechaString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Crear fecha usando los componentes directamente (sin zona horaria)
+    const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const formateada = fecha.toLocaleDateString("es-ES", {
+      day: "numeric",
+      month: "long",
+    });
+    return formateada.charAt(0).toUpperCase() + formateada.slice(1);
+  }
+  
+  // Fallback si el formato es diferente
+  return fechaString;
 };
 
 export function EvaluacionView({
@@ -49,10 +63,13 @@ export function EvaluacionView({
   cargarDatosFiltrados,
   setModalConfiguracionAspecto,
   setModalConfiguracionValoracion,
+  setModalConfiguracionPregunta,
   configuracionAspectos,
   configuracionValoraciones,
+  configuracionPreguntas = [],
   handleEliminarConfiguracionAspecto,
   handleEliminarConfiguracionValoracion,
+  handleEliminarConfiguracionPregunta,
   refreshAspectos,
 }: EvaluacionViewProps) {
 
@@ -186,7 +203,7 @@ export function EvaluacionView({
                   onClick={() =>
                     setModalConfiguracionAspecto({
                       isOpen: true,
-                      configuracion: { CONFIGURACION_EVALUACION_ID: configuracionSeleccionada },
+                      configuracion: undefined,
                     })
                   }
                 >
@@ -265,7 +282,7 @@ export function EvaluacionView({
                   onClick={() =>
                     setModalConfiguracionValoracion({
                       isOpen: true,
-                      configuracion: { CONFIGURACION_EVALUACION_ID: configuracionSeleccionada },
+                      configuracion: undefined,
                     })
                   }
                 >
@@ -273,6 +290,86 @@ export function EvaluacionView({
                   Agregar Valoración
                 </Button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Preguntas Section */}
+        {configuracionSeleccionada && setModalConfiguracionPregunta && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-2">Preguntas</h3>
+            <div className="space-y-3">
+              {configuracionPreguntas.map((pregunta) => (
+                <Card key={pregunta.ID} className="border border-muted">
+                  <CardContent className="p-4 flex justify-between items-center">
+                    <div className="flex items-center gap-3 mb-1 flex-wrap">
+                      <h3 className="font-semibold">{pregunta.TEXTO || `Pregunta ${pregunta.PREGUNTA_ID}`}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {pregunta.TIPO_PREGUNTA || 'N/A'}
+                      </Badge>
+                      <Badge
+                        variant={pregunta.ACTIVO ? "default" : "destructive"}
+                        className="flex items-center gap-1"
+                      >
+                        {pregunta.ACTIVO ? (
+                          <CheckCircle2 className="h-4 w-4" />
+                        ) : (
+                          <XCircle className="h-4 w-4" />
+                        )}
+                        {pregunta.ACTIVO ? "Activo" : "Inactivo"}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setModalConfiguracionPregunta({ isOpen: true, configuracion: pregunta })}
+                        title="Editar"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEliminarConfiguracionPregunta?.(pregunta)}
+                        title="Eliminar"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        disabled={loadingId === pregunta.ID}
+                        onClick={() => toggleEstado(pregunta, configuracionPreguntaService, refreshAspectos)}
+                        title={pregunta.ACTIVO ? "Desactivar" : "Activar"}
+                        className="hover:bg-muted hover:text-primary"
+                      >
+                        {loadingId === pregunta.ID ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : pregunta.ACTIVO ? (
+                          <PowerOff className="h-4 w-4" />
+                        ) : (
+                          <Power className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+              <Button
+                className="w-full"
+                onClick={() =>
+                  setModalConfiguracionPregunta({
+                    isOpen: true,
+                    configuracion: undefined,
+                  })
+                }
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Agregar Pregunta
+              </Button>
             </div>
           </div>
         )}

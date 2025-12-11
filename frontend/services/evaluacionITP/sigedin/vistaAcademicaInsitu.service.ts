@@ -33,16 +33,29 @@ interface OpcionesFiltrosResponse {
 
 export const vistaAcademicaService = {
   /**
-   * Obtiene opciones disponibles para filtros basado en filtros ya aplicados
+   * Obtiene opciones disponibles para filtros basado en filtros ya aplicados.
+   * Utiliza el endpoint GET /academica/opciones-filtros que devuelve opciones
+   * dinámicas (sedes, programas, semestres, grupos) filtradas según los
+   * parámetros seleccionados.
+   * 
+   * @param filtros - Objeto con los filtros aplicados
+   * @param filtros.periodo - Periodo académico (requerido por el backend)
+   * @param filtros.sede - Sede seleccionada (opcional)
+   * @param filtros.programa - Programa seleccionado (opcional)
+   * @param filtros.semestre - Semestre seleccionado (opcional)
+   * @param filtros.grupo - Grupo seleccionado (opcional)
    */
   getOpcionesFiltros: async (filtros: FiltrosDinamicos): Promise<ApiResponse<OpcionesFiltrosResponse>> => {
     try {
       const params = new URLSearchParams();
       
+      // Periodo es requerido por el backend
       if (filtros.periodo) params.append('periodo', filtros.periodo);
       if (filtros.sede) params.append('sede', filtros.sede);
       if (filtros.programa) params.append('programa', filtros.programa);
       if (filtros.semestre) params.append('semestre', filtros.semestre);
+      // Grupo también se puede enviar para filtrado más específico
+      if (filtros.grupo) params.append('grupo', filtros.grupo);
 
       const response = await apiClient.get<OpcionesFiltrosResponse>(`/academica/opciones-filtros?${params.toString()}`);
       return response;

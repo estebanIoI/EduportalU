@@ -45,6 +45,10 @@ export interface ConfiguracionEvaluacion {
   FECHA_INICIO: string;
   FECHA_FIN: string;
   ACTIVO: boolean;
+  ES_EVALUACION_DOCENTE: boolean;
+  TITULO?: string;
+  INSTRUCCIONES?: string;
+  URL_FORMULARIO?: string;
 }
 
 export interface ConfiguracionEvaluacionInput {
@@ -52,6 +56,10 @@ export interface ConfiguracionEvaluacionInput {
   FECHA_INICIO: string;
   FECHA_FIN: string;
   ACTIVO: boolean;
+  ES_EVALUACION_DOCENTE: boolean;
+  TITULO?: string;
+  INSTRUCCIONES?: string;
+  URL_FORMULARIO?: string;
 }
 
 // Tipo para actualizar (incluye ID)
@@ -70,9 +78,32 @@ export interface ConfiguracionValoracion {
 
 export interface EscalaValoracion {
   ID: number;
+  VALORACION_ID: number;
   VALOR: string;
   ETIQUETA: string;
   DESCRIPCION: string;
+  PUNTAJE?: number;
+  ORDEN?: number;
+  ACTIVO?: boolean;
+}
+
+export interface Pregunta {
+  ID: number;
+  TEXTO: string;
+  TIPO_PREGUNTA: string;
+  ORDEN: number;
+  ACTIVO: boolean;
+  OPCIONES?: string;
+}
+
+export interface ConfiguracionPregunta {
+  ID: number;
+  CONFIGURACION_EVALUACION_ID: number;
+  PREGUNTA_ID: number;
+  ORDEN: number;
+  ACTIVO: boolean;
+  TEXTO?: string;
+  TIPO_PREGUNTA?: string;
 }
 
 export interface TipoEvaluacion {
@@ -86,6 +117,7 @@ export interface ConfiguracionResponse {
   configuracion: ConfiguracionInformacion;
   aspectos: AspectoEvaluacion[];
   valoraciones: EscalaValoracion[];
+  preguntas?: Pregunta[];
 }
 
 export interface Evaluacion {
@@ -131,6 +163,13 @@ export interface ConfiguracionInformacion {
   FECHA_INICIO: string;
   FECHA_FIN: string;
   ACTIVO: boolean;
+  TIPO_EVALUACION_ID: number;
+  TIPO_EVALUACION_NOMBRE: string;
+  TIPO_EVALUACION_DESCRIPCION: string;
+  ES_EVALUACION_DOCENTE: boolean;
+  TITULO?: string;
+  INSTRUCCIONES?: string;
+  URL_FORMULARIO?: string;
 }
 
 // -----------------------------------

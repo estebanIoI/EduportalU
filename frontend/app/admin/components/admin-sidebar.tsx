@@ -167,6 +167,18 @@ export function AdminSidebar({ isCollapsed = false, onToggle }: AdminSidebarProp
       icon: FileCode,
       label: "Formulario",
       description: "Crear formularios"
+    },
+    {
+      href: "/admin/informes",
+      icon: FileText,
+      label: "Informes",
+      description: "Evaluaciones genéricas"
+    },
+    {
+      href: "/admin/reportes",
+      icon: Download,
+      label: "Reportes",
+      description: "Reportes y análisis IA"
     }
   ]
 

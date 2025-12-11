@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { tiposEvaluacionService } from "@/services";
@@ -32,6 +33,7 @@ export default function EvaluarDocentePage({
   const { toast } = useToast();
   const [evaluaciones, setEvaluaciones] = useState<Record<number, string>>({});
   const [comentarios, setComentarios] = useState<Record<string, string>>({});
+  const [respuestas, setRespuestas] = useState<Record<number, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [config, setConfig] = useState<ConfiguracionResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,6 +137,13 @@ export default function EvaluarDocentePage({
     setComentarios((prev) => ({
       ...prev,
       [aspectoId]: value,
+    }));
+  };
+
+  const handleRespuestaChange = (preguntaId: number, value: string) => {
+    setRespuestas((prev) => ({
+      ...prev,
+      [preguntaId]: value,
     }));
   };
 
@@ -301,8 +310,8 @@ export default function EvaluarDocentePage({
                                 className="flex flex-col items-center"
                               >
                                 <RadioGroupItem
-                                  value={valoracion.ID.toString()}
-                                  id={`${aspecto.ID}-${valoracion.ID}`}
+                                  value={valoracion.VALORACION_ID.toString()}
+                                  id={`${aspecto.ID}-${valoracion.VALORACION_ID}`}
                                   className="h-7 w-7 rounded-full border-gray-300 hover:bg-blue-100 transition-all"
                                 />
                                 <span className="mt-1 text-xs sm:text-base">
@@ -326,6 +335,104 @@ export default function EvaluarDocentePage({
                   </div>
                 ))}
               </div>
+
+              {/* Preguntas genéricas */}
+              {config.preguntas && config.preguntas.length > 0 && (
+                <div className="mb-8">
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">
+                    Preguntas Adicionales
+                  </h3>
+                  {config.preguntas.map((pregunta) => (
+                    <div
+                      key={pregunta.ID}
+                      className="mb-4 rounded-lg border border-gray-200 shadow bg-white transition-all"
+                    >
+                      <button
+                        type="button"
+                        className="w-full flex justify-between items-center p-3 sm:p-4 focus:outline-none hover:bg-gray-50 transition"
+                        onClick={() =>
+                          setOpenAspecto(openAspecto === pregunta.ID + 1000 ? null : pregunta.ID + 1000)
+                        }
+                      >
+                        <span className="text-base sm:text-lg font-semibold text-gray-800">
+                          {pregunta.TEXTO}
+                        </span>
+                        <span className="ml-2">
+                          {openAspecto === pregunta.ID + 1000 ? (
+                            <svg
+                              className="w-5 h-5 text-gray-500"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 15l7-7 7 7"
+                              />
+                            </svg>
+                          ) : (
+                            <svg
+                              className="w-5 h-5 text-gray-500"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M19 9l-7 7-7-7"
+                              />
+                            </svg>
+                          )}
+                        </span>
+                      </button>
+                      {openAspecto === pregunta.ID + 1000 && (
+                        <div className="p-3 sm:p-4 border-t border-gray-100">
+                          {pregunta.TIPO_PREGUNTA === 'texto_corto' && (
+                            <Input
+                              placeholder="Tu respuesta..."
+                              value={respuestas[pregunta.ID] || ""}
+                              onChange={(e) => handleRespuestaChange(pregunta.ID, e.target.value)}
+                              className="border rounded-md p-3 border-gray-300 focus:ring-2 focus:ring-blue-400 transition-all"
+                            />
+                          )}
+                          {pregunta.TIPO_PREGUNTA === 'texto_largo' && (
+                            <Textarea
+                              placeholder="Tu respuesta..."
+                              value={respuestas[pregunta.ID] || ""}
+                              onChange={(e) => handleRespuestaChange(pregunta.ID, e.target.value)}
+                              className="h-20 sm:h-24 border rounded-md p-3 sm:p-4 border-gray-300 focus:ring-2 focus:ring-blue-400 transition-all"
+                            />
+                          )}
+                          {pregunta.TIPO_PREGUNTA === 'opcion_multiple' && pregunta.OPCIONES && (
+                            <RadioGroup
+                              value={respuestas[pregunta.ID] || ""}
+                              onValueChange={(value) => handleRespuestaChange(pregunta.ID, value)}
+                              className="space-y-2"
+                            >
+                              {JSON.parse(pregunta.OPCIONES).map((opcion: string, index: number) => (
+                                <div key={index} className="flex items-center space-x-2">
+                                  <RadioGroupItem
+                                    value={opcion}
+                                    id={`pregunta-${pregunta.ID}-opcion-${index}`}
+                                  />
+                                  <Label htmlFor={`pregunta-${pregunta.ID}-opcion-${index}`}>
+                                    {opcion}
+                                  </Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {/* Comentario general expandible */}
               <div className="mb-4 rounded-lg border border-gray-200 shadow bg-white transition-all">
                 <button

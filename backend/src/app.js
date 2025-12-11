@@ -81,19 +81,25 @@ app.get('/health', async (req, res) => {
     const [rows] = await pool.query('SELECT 1 as health');
     
     res.status(200).json({ 
-      status: 'UP', 
+      success: true,
       message: 'Servidor funcionando correctamente',
-      database: 'Connected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
+      data: {
+        status: 'UP',
+        database: 'Connected',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+      }
     });
   } catch (error) {
     res.status(503).json({ 
-      status: 'DOWN', 
+      success: false,
       message: 'Error en el servidor',
-      database: 'Disconnected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
+      data: {
+        status: 'DOWN',
+        database: 'Disconnected',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
+      }
     });
   }
 });
@@ -105,21 +111,27 @@ app.get('/api/v1/health', async (req, res) => {
     const [rows] = await pool.query('SELECT 1 as health');
     
     res.status(200).json({ 
-      status: 'UP', 
+      success: true,
       message: 'API funcionando correctamente',
-      database: 'Connected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-      version: '1.0.0'
+      data: {
+        status: 'UP',
+        database: 'Connected',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        version: '1.0.0'
+      }
     });
   } catch (error) {
     res.status(503).json({ 
-      status: 'DOWN', 
+      success: false,
       message: 'Error en la API',
-      database: 'Disconnected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development',
-      version: '1.0.0'
+      data: {
+        status: 'DOWN',
+        database: 'Disconnected',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        version: '1.0.0'
+      }
     });
   }
 });
