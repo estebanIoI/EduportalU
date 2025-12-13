@@ -13,8 +13,8 @@ const printStartupMessages = () => {
   console.log(`📡 Puerto: ${PORT}`);
   
   if (process.env.NODE_ENV === 'production') {
-    console.log(`🌐 API: http://62.146.231.110/api/v1`);
-    console.log(`📚 Swagger: http://62.146.231.110/api-docs`);
+    console.log(`🌐 API: https://clownfish-app-hnngr.ondigitalocean.app/api/v1`);
+    console.log(`📚 Swagger: https://clownfish-app-hnngr.ondigitalocean.app/api-docs`);
   } else {
     console.log(`🌐 API: http://localhost:${PORT}/api/v1`);
     console.log(`📚 Swagger: http://localhost:${PORT}/api-docs`);

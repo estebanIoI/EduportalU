@@ -20,7 +20,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Set environment variables for build
-ENV NEXT_PUBLIC_API_URL=http://62.146.231.110:3000/api/v1
+ENV NEXT_PUBLIC_API_URL=https://clownfish-app-hnngr.ondigitalocean.app/api/v1
 ENV NEXT_PUBLIC_API_TIMEOUT=30000
 ENV NEXT_PUBLIC_RETRY_ATTEMPTS=3
 ENV NEXT_PUBLIC_RETRY_DELAY=1000

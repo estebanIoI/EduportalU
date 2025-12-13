@@ -25,7 +25,7 @@ const options = {
     ],
     servers: [
       {
-        url: process.env.NODE_ENV === 'production' ? 'http://62.146.231.110/api/v1' : 'http://localhost:5000/api/v1',
+        url: process.env.NODE_ENV === 'production' ? 'https://clownfish-app-hnngr.ondigitalocean.app/api/v1' : 'http://localhost:5000/api/v1',
         description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server',
       },
     ],

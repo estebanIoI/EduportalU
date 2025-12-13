@@ -18,6 +18,8 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Lista de orígenes permitidos
     const allowedOrigins = [
+      'https://clownfish-app-hnngr.ondigitalocean.app',
+      'http://clownfish-app-hnngr.ondigitalocean.app',
       'http://62.146.231.110',
       'https://62.146.231.110',
       'http://62.146.231.110:3000',
