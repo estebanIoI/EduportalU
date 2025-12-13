@@ -1,3 +1,4 @@
+DROP DATABASE IF EXISTS sigedin_ies_v4;
 CREATE DATABASE sigedin_ies_v4 CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 USE sigedin_ies_v4;
@@ -273,7 +274,7 @@ CREATE TABLE IF NOT EXISTS EVALUACIONES_GENERICAS_DETALLE (
 
 -- ------------------------------------------------------------------------------------------------------------------------------------------
 
-INSERT INTO evaluaciones (DOCUMENTO_ESTUDIANTE, DOCUMENTO_DOCENTE, CODIGO_MATERIA, COMENTARIO_GENERAL, ID_CONFIGURACION) VALUES
+INSERT INTO EVALUACIONES (DOCUMENTO_ESTUDIANTE, DOCUMENTO_DOCENTE, CODIGO_MATERIA, COMENTARIO_GENERAL, ID_CONFIGURACION) VALUES
 -- Estudiante: 1007548901
 ('1007548901', '18128952', '6647', '', 1),
 ('1007548901', '1094963626', '6650', '', 1),
@@ -284,7 +285,7 @@ INSERT INTO evaluaciones (DOCUMENTO_ESTUDIANTE, DOCUMENTO_DOCENTE, CODIGO_MATERI
 
 -- ------------------------------------------------------------------------------------------------------------------------------------------
 
-INSERT INTO evaluacion_detalle (EVALUACION_ID, ASPECTO_ID, VALORACION_ID, COMENTARIO) VALUES
+INSERT INTO EVALUACION_DETALLE (EVALUACION_ID, ASPECTO_ID, VALORACION_ID, COMENTARIO) VALUES
 -- Evaluación 1
 (1, 1, 1, 'Excelente dominio del tema, con una explicación clara y profunda.'),
 (1, 2, 1, 'Cumple de manera excelente con los objetivos y tareas del curso.'),

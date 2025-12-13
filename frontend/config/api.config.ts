@@ -2,9 +2,9 @@ import { ApiConfig } from '@/lib/types/api.types';
 
 // Función para obtener la URL base de la API
 const getApiBaseUrl = (): string => {
-  // En producción, usar la IP del servidor
+  // En producción, usar la URL de Digital Ocean
   if (process.env.NODE_ENV === 'production') {
-    return process.env.NEXT_PUBLIC_API_URL || 'http://62.146.231.110:5000/api/v1';
+    return process.env.NEXT_PUBLIC_API_URL || 'https://clownfish-app-hnngr.ondigitalocean.app/api/v1';
   }
   
   // En desarrollo, usar localhost o la variable de entorno

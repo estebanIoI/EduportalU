@@ -15,7 +15,7 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
-    domains: ['62.146.231.110', 'virtual.itp.edu.co', 'itp.edu.co'],
+    domains: ['clownfish-app-hnngr.ondigitalocean.app', 'virtual.itp.edu.co', 'itp.edu.co'],
   },
   output: 'standalone',
   experimental: {
@@ -24,7 +24,7 @@ const nextConfig = {
     parallelServerCompiles: true,
   },
   env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://62.146.231.110:5000/api/v1',
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'https://clownfish-app-hnngr.ondigitalocean.app/api/v1',
     NEXT_PUBLIC_API_TIMEOUT: process.env.NEXT_PUBLIC_API_TIMEOUT || '30000',
     NEXT_PUBLIC_RETRY_ATTEMPTS: process.env.NEXT_PUBLIC_RETRY_ATTEMPTS || '3',
     NEXT_PUBLIC_RETRY_DELAY: process.env.NEXT_PUBLIC_RETRY_DELAY || '1000',
@@ -33,7 +33,7 @@ const nextConfig = {
     return [
       {
         source: '/api/:path*',
-        destination: `${process.env.NEXT_PUBLIC_API_URL || 'http://62.146.231.110:5000/api/v1'}/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_API_URL || 'https://clownfish-app-hnngr.ondigitalocean.app/api/v1'}/:path*`,
       },
     ]
   },
