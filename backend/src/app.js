@@ -146,8 +146,21 @@ app.get('/api/v1/health', async (req, res) => {
 });
 
 // API routes
-app.use('/api/v1', routes);
+// Si Digital Ocean tiene "Preserve Path Prefix" MARCADO, usar '/api/v1'
+// Si Digital Ocean tiene "Preserve Path Prefix" DESMARCADO, usar '/'
+const API_PREFIX = process.env.API_PREFIX || '/api/v1';
+app.use(API_PREFIX, routes);
 app.use('/api/dashboard', dashboardRoutes);
+
+// Ruta raíz para verificar que el backend está funcionando
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Backend API funcionando',
+    apiPrefix: API_PREFIX,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
