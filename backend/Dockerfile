@@ -46,6 +46,7 @@ EXPOSE 5000
 # Variables de entorno por defecto
 ENV NODE_ENV=production
 ENV PORT=5000
+ENV CORS_ORIGIN=https://clownfish-app-hnngr.ondigitalocean.app
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

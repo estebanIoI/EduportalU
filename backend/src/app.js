@@ -46,8 +46,15 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Manejar preflight requests explícitamente
+app.options('*', cors(corsOptions));
+
 // Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "unsafe-none" },
+  contentSecurityPolicy: false, // Desactivar CSP para permitir requests cross-origin
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
