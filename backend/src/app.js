@@ -91,11 +91,7 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 // Middleware de debugging
 app.use((req, res, next) => {
-  if (process.env.NODE_ENV !== 'production') {
-    console.log(`📨 ${req.method} ${req.path}`);
-    console.log(`   Origin: ${req.get('origin') || 'Sin origin'}`);
-    console.log(`   Headers: ${JSON.stringify(req.headers, null, 2)}`);
-  }
+  console.log(`📨 ${req.method} ${req.originalUrl} - Origin: ${req.get('origin') || 'Sin origin'}`);
   next();
 });
 
@@ -118,26 +114,41 @@ app.get('/health', async (req, res) => {
     
     res.status(200).json({ 
       success: true,
-      message: 'API funcionando correctamente',
+      message: 'Servidor funcionando correctamente',
       data: {
         status: 'UP',
         database: 'Connected',
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-        version: '1.0.0'
+        environment: process.env.NODE_ENV || 'development'
       }
     });
   } catch (error) {
     res.status(503).json({ 
       success: false,
-      message: 'Error en la API',
-      error: error.message
+      message: 'Error en el servidor',
+      data: {
+        status: 'DOWN',
+        database: 'Disconnected',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }
     });
   }
 });
 
-// API routes - Sin prefijo porque Digital Ocean ya incluye /api/v1
-app.use('/', routes);
+// Ruta raíz
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Backend API funcionando',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
+  });
+});
+
+// API routes - CAMBIO IMPORTANTE AQUÍ
+// Digital Ocean ya incluye /api en la ruta, así que solo necesitamos /v1
+app.use('/v1', routes);
 app.use('/dashboard', dashboardRoutes);
 
 // Swagger documentation
@@ -145,15 +156,15 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
 
 // 404 handler
 app.use((req, res) => {
+  console.log(`❌ 404 - Ruta no encontrada: ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
-    message: `Recurso no encontrado: ${req.method} ${req.path}`,
+    message: `Recurso no encontrado: ${req.method} ${req.originalUrl}`,
     availableEndpoints: [
-      'GET /',
-      'GET /health',
-      'GET /api/v1/health',
-      'POST /api/v1/auth/login',
-      'GET /api-docs'
+      'GET /api/',
+      'GET /api/health',
+      'GET /api/v1/...',
+      'POST /api/v1/auth/login'
     ]
   });
 });
