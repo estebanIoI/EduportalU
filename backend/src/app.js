@@ -110,38 +110,8 @@ initializeDatabase()
     process.exit(1);
   });
 
-// Health check endpoints
+// Health check endpoint
 app.get('/health', async (req, res) => {
-  try {
-    const pool = require('./db').getPool();
-    await pool.query('SELECT 1 as health');
-    
-    res.status(200).json({ 
-      success: true,
-      message: 'Servidor funcionando correctamente',
-      data: {
-        status: 'UP',
-        database: 'Connected',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
-      }
-    });
-  } catch (error) {
-    res.status(503).json({ 
-      success: false,
-      message: 'Error en el servidor',
-      data: {
-        status: 'DOWN',
-        database: 'Disconnected',
-        error: error.message,
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
-      }
-    });
-  }
-});
-
-app.get('/api/v1/health', async (req, res) => {
   try {
     const pool = require('./db').getPool();
     await pool.query('SELECT 1 as health');
@@ -161,33 +131,14 @@ app.get('/api/v1/health', async (req, res) => {
     res.status(503).json({ 
       success: false,
       message: 'Error en la API',
-      data: {
-        status: 'DOWN',
-        database: 'Disconnected',
-        error: error.message,
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development',
-        version: '1.0.0'
-      }
+      error: error.message
     });
   }
 });
 
-// Ruta raíz
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Backend API funcionando',
-    apiPrefix: process.env.API_PREFIX || '/api/v1',
-    timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV
-  });
-});
-
-// API routes
-const API_PREFIX = process.env.API_PREFIX || '/api/v1';
-app.use(API_PREFIX, routes);
-app.use('/api/dashboard', dashboardRoutes);
+// API routes - Sin prefijo porque Digital Ocean ya incluye /api/v1
+app.use('/', routes);
+app.use('/dashboard', dashboardRoutes);
 
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
