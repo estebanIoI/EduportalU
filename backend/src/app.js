@@ -13,68 +13,96 @@ const errorHandler = require('./api/v1/middlewares/errorHandler');
 // Initialize express app
 const app = express();
 
-// Configuración de CORS
+// Configuración de CORS - Mismo dominio
+const allowedOrigins = [
+  // Producción - Mismo dominio
+  'https://clownfish-app-hnngr.ondigitalocean.app',
+  'http://clownfish-app-hnngr.ondigitalocean.app',
+  
+  // Desarrollo local
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5000'
+];
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // Lista de orígenes permitidos
-    const allowedOrigins = [
-      'https://clownfish-app-hnngr.ondigitalocean.app',
-      'http://clownfish-app-hnngr.ondigitalocean.app',
-      'http://62.146.231.110',
-      'https://62.146.231.110',
-      'http://62.146.231.110:3000',
-      'https://62.146.231.110:3000',
-      'http://localhost:3000', // Para desarrollo
-      'http://localhost:5000'  // Para testing
-    ];
-    
-    // Permitir requests sin origin (como mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      console.log(`CORS blocked origin: ${origin}`);
-      callback(null, true); // Permitir todos los orígenes en producción por ahora
+    // Permitir requests sin origin (mismo dominio, Postman, etc.)
+    if (!origin) {
+      return callback(null, true);
     }
+    
+    // Verificar si está en la lista
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    // Log para debugging
+    console.log(`⚠️ CORS: Origen no listado: ${origin}`);
+    
+    // En producción, permitir mismo dominio aunque no esté listado
+    if (origin && origin.includes('clownfish-app-hnngr.ondigitalocean.app')) {
+      return callback(null, true);
+    }
+    
+    // Permitir en desarrollo
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    callback(new Error('No permitido por CORS'), false);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
   credentials: true,
-  maxAge: 86400 // 24 horas
+  maxAge: 86400,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
+// CORS debe ir PRIMERO
 app.use(cors(corsOptions));
-
-// Manejar preflight requests explícitamente
 app.options('*', cors(corsOptions));
 
-// Middleware
+// Configuración de Helmet más permisiva
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "unsafe-none" },
-  contentSecurityPolicy: false, // Desactivar CSP para permitir requests cross-origin
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: false,
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(morgan('dev'));
 
-// Initialize database connection
+// Body parsers
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Logger
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// Middleware de debugging
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`📨 ${req.method} ${req.path}`);
+    console.log(`   Origin: ${req.get('origin') || 'Sin origin'}`);
+    console.log(`   Headers: ${JSON.stringify(req.headers, null, 2)}`);
+  }
+  next();
+});
+
+// Initialize database
 initializeDatabase()
   .then(() => {
     console.log('✅ Base de datos inicializada correctamente');
-    
-    // Solo mostrar configuración detallada en desarrollo
-    if (process.env.NODE_ENV === 'development') {
-      console.log('\n🔒 CORS activado con las siguientes configuraciones:');
-      console.log('════════════════════════════════════════════════════════════════════════════');
-      console.log('   • Origen: Configurado para producción');
-      console.log('   • Métodos: GET, POST, PUT, DELETE, PATCH, OPTIONS');
-      console.log('   • Headers: Content-Type, Authorization');
-      console.log('   • Credenciales: Habilitadas');
-      console.log('   • Tiempo de caché: 24 horas');
-      console.log('════════════════════════════════════════════════════════════════════════════\n');
-    }
   })
   .catch((error) => {
     console.error('\n❌ Error al iniciar el servidor:');
@@ -85,9 +113,8 @@ initializeDatabase()
 // Health check endpoints
 app.get('/health', async (req, res) => {
   try {
-    // Verificar conexión a base de datos local
     const pool = require('./db').getPool();
-    const [rows] = await pool.query('SELECT 1 as health');
+    await pool.query('SELECT 1 as health');
     
     res.status(200).json({ 
       success: true,
@@ -106,6 +133,7 @@ app.get('/health', async (req, res) => {
       data: {
         status: 'DOWN',
         database: 'Disconnected',
+        error: error.message,
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development'
       }
@@ -115,9 +143,8 @@ app.get('/health', async (req, res) => {
 
 app.get('/api/v1/health', async (req, res) => {
   try {
-    // Verificar conexión a base de datos local
     const pool = require('./db').getPool();
-    const [rows] = await pool.query('SELECT 1 as health');
+    await pool.query('SELECT 1 as health');
     
     res.status(200).json({ 
       success: true,
@@ -137,6 +164,7 @@ app.get('/api/v1/health', async (req, res) => {
       data: {
         status: 'DOWN',
         database: 'Disconnected',
+        error: error.message,
         timestamp: new Date().toISOString(),
         environment: process.env.NODE_ENV || 'development',
         version: '1.0.0'
@@ -145,56 +173,37 @@ app.get('/api/v1/health', async (req, res) => {
   }
 });
 
-// API routes
-// Si Digital Ocean tiene "Preserve Path Prefix" MARCADO, usar '/api/v1'
-// Si Digital Ocean tiene "Preserve Path Prefix" DESMARCADO, usar '/'
-const API_PREFIX = process.env.API_PREFIX || '/api/v1';
-app.use(API_PREFIX, routes);
-app.use('/api/dashboard', dashboardRoutes);
-
-// Ruta raíz para verificar que el backend está funcionando
+// Ruta raíz
 app.get('/', (req, res) => {
   res.json({
     success: true,
     message: 'Backend API funcionando',
-    apiPrefix: API_PREFIX,
-    timestamp: new Date().toISOString()
+    apiPrefix: process.env.API_PREFIX || '/api/v1',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV
   });
 });
 
+// API routes
+const API_PREFIX = process.env.API_PREFIX || '/api/v1';
+app.use(API_PREFIX, routes);
+app.use('/api/dashboard', dashboardRoutes);
+
 // Swagger documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs));
-
-// Health check endpoint
-app.get('/health', async (req, res) => {
-  try {
-    // Verificar conexión a base de datos local
-    const pool = require('./db').getPool();
-    const [rows] = await pool.query('SELECT 1 as health');
-    
-    res.status(200).json({ 
-      status: 'UP', 
-      message: 'Servidor funcionando correctamente',
-      database: 'Connected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
-    });
-  } catch (error) {
-    res.status(503).json({ 
-      status: 'DOWN', 
-      message: 'Error en el servidor',
-      database: 'Disconnected',
-      timestamp: new Date().toISOString(),
-      environment: process.env.NODE_ENV || 'development'
-    });
-  }
-});
 
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Recurso no encontrado'
+    message: `Recurso no encontrado: ${req.method} ${req.path}`,
+    availableEndpoints: [
+      'GET /',
+      'GET /health',
+      'GET /api/v1/health',
+      'POST /api/v1/auth/login',
+      'GET /api-docs'
+    ]
   });
 });
 
