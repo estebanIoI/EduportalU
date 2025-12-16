@@ -106,7 +106,7 @@ initializeDatabase()
     process.exit(1);
   });
 
-// Health check endpoint
+// Health check endpoint (raíz)
 app.get('/health', async (req, res) => {
   try {
     const pool = require('./db').getPool();
@@ -136,6 +136,37 @@ app.get('/health', async (req, res) => {
   }
 });
 
+// Health check en /v1/health (para Digital Ocean health check)
+app.get('/v1/health', async (req, res) => {
+  try {
+    const pool = require('./db').getPool();
+    await pool.query('SELECT 1 as health');
+    
+    res.status(200).json({ 
+      success: true,
+      message: 'API v1 funcionando correctamente',
+      data: {
+        status: 'UP',
+        database: 'Connected',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development',
+        version: '1.0.0'
+      }
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      success: false,
+      message: 'Error en la API',
+      data: {
+        status: 'DOWN',
+        database: 'Disconnected',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+});
+
 // Ruta raíz
 app.get('/', (req, res) => {
   res.json({
@@ -146,9 +177,12 @@ app.get('/', (req, res) => {
   });
 });
 
-// API routes - CAMBIO IMPORTANTE AQUÍ
-// Digital Ocean ya incluye /api en la ruta, así que solo necesitamos /v1
-app.use('/v1', routes);
+// API routes - Configuración para Digital Ocean
+// DO tiene path prefix "/api", las rutas llegan como /v1/...
+// Por eso montamos las rutas en '/v1'
+const API_PREFIX = process.env.API_PREFIX || '/v1';
+console.log(`🚀 Montando rutas en: ${API_PREFIX}`);
+app.use(API_PREFIX, routes);
 app.use('/dashboard', dashboardRoutes);
 
 // Swagger documentation

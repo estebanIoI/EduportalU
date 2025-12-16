@@ -5,9 +5,14 @@ const MESSAGES = require('../../../../constants/messages');
 
 const login = async (req, res, next) => {
   try {
+    console.log('🔐 Login request recibido');
+    console.log('📨 Body:', JSON.stringify(req.body, null, 2));
+    console.log('📨 Headers:', JSON.stringify(req.headers, null, 2));
+    
     const { user_username, user_password } = req.body;
     
     if (!user_username || !user_password) {
+      console.log('❌ Campos faltantes');
       return errorResponse(res, {
         code: 400,
         message: MESSAGES.GENERAL.MISSING_FIELDS,
@@ -15,15 +20,19 @@ const login = async (req, res, next) => {
       });
     }
     
+    console.log(`🔍 Intentando autenticar usuario: ${user_username}`);
     const loginResult = await UserAuthService.authenticateUser(user_username, user_password);
     
+    console.log('✅ Login exitoso');
     return successResponse(res, {
       code: 200,
       message: loginResult.message,
       data: loginResult.data
     });
   } catch (error) {
-    console.error('Error en login:', error);
+    console.error('❌ Error en login:', error);
+    console.error('❌ Error code:', error.code);
+    console.error('❌ Error message:', error.message);
     
     // Manejar errores específicos del servicio
     if (error.code) {
