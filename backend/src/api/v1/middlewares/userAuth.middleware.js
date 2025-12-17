@@ -57,7 +57,7 @@ const checkRole = (allowedRoles) => async (req, res, next) => {
     const [userRolesRows] = await pool.query(
       `SELECT r.ID, r.NOMBRE_ROL 
        FROM users_roles ur 
-       JOIN roles r ON ur.rol_id = r.ID 
+       JOIN ROLES r ON ur.rol_id = r.ID 
        WHERE ur.user_id = ?`,
       [userId]
     );
